@@ -28,3 +28,30 @@ VALUES
 
 ('ESTADO', 'VIG', 'Vigente'),
 ('ESTADO', 'INA', 'Inactivo');
+
+-- ============================================
+-- FOLIADO Y CONSECUTIVOS INSTITUCIONALES
+-- ============================================
+
+CREATE TABLE consecutivo_institucional (
+    id_consecutivo      SERIAL PRIMARY KEY,
+    tipo_documento      VARCHAR(30) NOT NULL,
+    anio                INT NOT NULL,
+    ultimo_numero       INT NOT NULL DEFAULT 0,
+    prefijo             VARCHAR(20) NOT NULL DEFAULT 'DAIR',
+    activo              BOOLEAN DEFAULT TRUE,
+    CONSTRAINT uq_consecutivo_tipo_anio UNIQUE (tipo_documento, anio)
+);
+
+CREATE TABLE folio_documento (
+    id_folio            SERIAL PRIMARY KEY,
+    tipo_documento      VARCHAR(30) NOT NULL,
+    anio                INT NOT NULL,
+    numero              INT NOT NULL,
+    folio               VARCHAR(30) UNIQUE NOT NULL,
+    fecha_generacion    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    id_usuario_genero   INT,
+    observacion         TEXT,
+    CONSTRAINT uq_folio_tipo_anio_numero UNIQUE (tipo_documento, anio, numero)
+);
+
