@@ -112,3 +112,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- ============================================
+-- PRUEBA MANUAL ESPERADA
+-- ============================================
+-- SELECT fn_generar_folio('CERTIFICACION', 2026, NULL, 'Certificacion inicial');
+-- Resultado esperado: DAIR-001-2026
