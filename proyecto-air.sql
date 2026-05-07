@@ -42,3 +42,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- ============================================
+-- TRIGGERS DE TRAZABILIDAD
+-- ============================================
+
+CREATE TRIGGER tg_trazabilidad_asambleista
+AFTER INSERT OR UPDATE OR DELETE ON asambleista
+FOR EACH ROW
+EXECUTE FUNCTION fn_trazabilidad_general();
+
+CREATE TRIGGER tg_trazabilidad_nombramiento
+AFTER INSERT OR UPDATE OR DELETE ON nombramiento
+FOR EACH ROW
+EXECUTE FUNCTION fn_trazabilidad_general();
+
