@@ -45,3 +45,46 @@ CREATE TABLE elemento_normativo (id_elemento SERIAL PRIMARY KEY, id_reglamento I
 CREATE UNIQUE INDEX uq_etiqueta_vigente
 ON elemento_normativo (COALESCE(id_elemento_padre, 0),id_reglamento, numero_etiqueta)
 WHERE id_estado_vigencia = (SELECT id_estado_vigencia FROM catalogo_estado_vigencia WHERE nombre = 'Vigente');
+
+
+
+--TRIGGER: Versionamiento Normativo
+
+CREATE OR REPLACE FUNCTION fn_vigencia_normativa()
+RETURNS TRIGGER AS $$
+DECLARE
+    estado_vigente_id INT;
+    estado_historico_id INT;
+BEGIN
+--Obtén los IDs de los estados
+    SELECT id_estado_vigencia INTO estado_vigente_id
+    FROM catalogo_estado_vigencia WHERE nombre = 'Vigente';
+
+    SELECT id_estado_vigencia INTO estado_historico_id
+    FROM catalogo_estado_vigencia WHERE nombre = 'Historico';
+
+--Si el nuevo elemento se inserta como VIGENTE
+    IF NEW.id_estado_vigencia = estado_vigente_id THEN
+--Busca si hay una versión anterior vigente
+        UPDATE elemento_normativo
+        SET id_estado_vigencia = estado_historico_id,
+            fecha_fin_vigencia = CURRENT_DATE
+        WHERE id_reglamento = NEW.id_reglamento
+--Mismo padre (si el padre es NULL, ambos deben ser NULL)
+          AND COALESCE(id_elemento_padre, 0) = COALESCE(NEW.id_elemento_padre, 0)
+--Mismo número de etiqueta
+          AND numero_etiqueta = NEW.numero_etiqueta
+--Que esté vigente actualmente
+          AND id_estado_vigencia = estado_vigente_id
+--Que no sea el mismo elemento (para UPDATEs)
+          AND id_elemento <> COALESCE(NEW.id_elemento, -1);
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+--Crear el trigger
+CREATE TRIGGER tg_vigencia_normativa
+BEFORE INSERT ON elemento_normativo
+FOR EACH ROW EXECUTE FUNCTION fn_vigencia_normativa();
