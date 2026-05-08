@@ -1,0 +1,82 @@
+name: Validar Script SQL en Pull Request
+
+# Se ejecuta cuando alguien abre o actualiza un PR hacia develop o main
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'proyecto-air.sql'
+      - '.github/workflows/**'
+
+jobs:
+  validar-sintaxis:
+    name: Validar sintaxis y estructura
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Verificar que el script existe y no esta vacio
+        run: |
+          if [ ! -f proyecto-air.sql ]; then
+            echo "::error::El archivo proyecto-air.sql no existe en la raiz del repositorio"
+            exit 1
+          fi
+
+          if [ ! -s proyecto-air.sql ]; then
+            echo "::error::El archivo proyecto-air.sql esta vacio"
+            exit 1
+          fi
+
+          echo "Archivo encontrado: $(wc -l < proyecto-air.sql) lineas"
+
+      - name: Validar cantidad minima de tablas
+        run: |
+          tablas=$(grep -c "CREATE TABLE" proyecto-air.sql || true)
+          echo "Tablas detectadas: $tablas"
+
+          if [ "$tablas" -lt 13 ]; then
+            echo "::error::Se esperan al menos 13 tablas. Encontradas: $tablas"
+            exit 1
+          fi
+
+          echo "Validacion de tablas OK"
+
+      - name: Validar cantidad minima de triggers
+        run: |
+          triggers=$(grep -c "CREATE OR ALTER TRIGGER\|CREATE TRIGGER" proyecto-air.sql || true)
+          echo "Triggers detectados: $triggers"
+
+          if [ "$triggers" -lt 5 ]; then
+            echo "::error::Se esperan al menos 5 triggers. Encontrados: $triggers"
+            exit 1
+          fi
+
+          echo "Validacion de triggers OK"
+
+      - name: Verificar Partial Unique Index
+        run: |
+          if ! grep -q "uq_etiqueta_vigente" proyecto-air.sql; then
+            echo "::error::Falta el indice uq_etiqueta_vigente (Regla de Oro del Issue #10)"
+            exit 1
+          fi
+          echo "Partial Unique Index presente"
+
+      - name: Verificar comandos peligrosos sin proteccion
+        run: |
+          if grep -iE "DROP\s+DATABASE|TRUNCATE\s+TABLE" proyecto-air.sql; then
+            echo "::warning::Se detectaron comandos potencialmente destructivos. Revisalos manualmente."
+          fi
+
+      - name: Resumen
+        run: |
+          echo "## Validaciones aprobadas" >> $GITHUB_STEP_SUMMARY
+          echo "- Script SQL presente y no vacio" >> $GITHUB_STEP_SUMMARY
+          echo "- Minimo 13 tablas" >> $GITHUB_STEP_SUMMARY
+          echo "- Minimo 5 triggers" >> $GITHUB_STEP_SUMMARY
+          echo "- Partial Unique Index implementado" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "El script SQL esta listo para ser revisado y mergeado a develop." >> $GITHUB_STEP_SUMMARY

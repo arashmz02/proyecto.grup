@@ -1,0 +1,108 @@
+name: Aplicar Script SQL a Azure
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'proyecto-air.sql'
+
+  workflow_dispatch:
+    inputs:
+      confirmar:
+        description: 'Escriba SI para confirmar la ejecucion manual'
+        required: true
+        default: 'NO'
+
+jobs:
+  aplicar-sql:
+    name: Ejecutar proyecto-air.sql en Azure
+    runs-on: ubuntu-latest
+
+    if: github.event_name == 'push' || github.event.inputs.confirmar == 'SI'
+
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Mostrar informacion del trigger
+        run: |
+          echo "Disparado por: ${{ github.actor }}"
+          echo "Evento: ${{ github.event_name }}"
+          echo "Rama: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+
+      - name: Instalar sqlcmd
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+          curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list > /dev/null
+          sudo apt-get update -y
+          sudo ACCEPT_EULA=Y apt-get install -y mssql-tools18 unixodbc-dev
+          echo "/opt/mssql-tools18/bin" >> $GITHUB_PATH
+
+      - name: Verificar conexion a Azure SQL
+        env:
+          DB_SERVER:   ${{ secrets.AZURE_DB_SERVER }}
+          DB_NAME:     ${{ secrets.AZURE_DB_NAME }}
+          DB_USER:     ${{ secrets.AZURE_DB_USER }}
+          DB_PASSWORD: ${{ secrets.AZURE_DB_PASSWORD }}
+        run: |
+          /opt/mssql-tools18/bin/sqlcmd \
+            -S "$DB_SERVER" \
+            -d "$DB_NAME" \
+            -U "$DB_USER" \
+            -P "$DB_PASSWORD" \
+            -Q "SELECT @@VERSION AS version, DB_NAME() AS bd, SUSER_SNAME() AS usuario;" \
+            -C \
+            -l 30
+
+      - name: Ejecutar proyecto-air.sql
+        env:
+          DB_SERVER:   ${{ secrets.AZURE_DB_SERVER }}
+          DB_NAME:     ${{ secrets.AZURE_DB_NAME }}
+          DB_USER:     ${{ secrets.AZURE_DB_USER }}
+          DB_PASSWORD: ${{ secrets.AZURE_DB_PASSWORD }}
+        run: |
+          echo "Ejecutando proyecto-air.sql contra $DB_SERVER..."
+
+          /opt/mssql-tools18/bin/sqlcmd \
+            -S "$DB_SERVER" \
+            -d "$DB_NAME" \
+            -U "$DB_USER" \
+            -P "$DB_PASSWORD" \
+            -i proyecto-air.sql \
+            -C \
+            -l 60 \
+            -b
+
+          echo "Script ejecutado exitosamente."
+
+      - name: Validar estado final de la BD
+        env:
+          DB_SERVER:   ${{ secrets.AZURE_DB_SERVER }}
+          DB_NAME:     ${{ secrets.AZURE_DB_NAME }}
+          DB_USER:     ${{ secrets.AZURE_DB_USER }}
+          DB_PASSWORD: ${{ secrets.AZURE_DB_PASSWORD }}
+        run: |
+          /opt/mssql-tools18/bin/sqlcmd \
+            -S "$DB_SERVER" \
+            -d "$DB_NAME" \
+            -U "$DB_USER" \
+            -P "$DB_PASSWORD" \
+            -Q "SELECT COUNT(*) AS total_tablas FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'; SELECT COUNT(*) AS total_triggers FROM sys.triggers;" \
+            -C
+
+      - name: Reporte de exito
+        if: success()
+        run: |
+          echo "## Deploy exitoso" >> $GITHUB_STEP_SUMMARY
+          echo "El script proyecto-air.sql se ejecuto correctamente sobre Azure SQL Database." >> $GITHUB_STEP_SUMMARY
+          echo "**Disparado por:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Reporte de falla
+        if: failure()
+        run: |
+          echo "## Deploy fallo" >> $GITHUB_STEP_SUMMARY
+          echo "El script no pudo ejecutarse sobre Azure. Revisa los logs arriba." >> $GITHUB_STEP_SUMMARY
