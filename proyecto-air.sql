@@ -88,3 +88,44 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER tg_vigencia_normativa
 BEFORE INSERT ON elemento_normativo
 FOR EACH ROW EXECUTE FUNCTION fn_vigencia_normativa();
+
+--Prueba: estatuto organico de ITCR
+
+INSERT INTO reglamento (nombre_normativa, sigla, emisor) 
+VALUES ('Estatuto Orgánico del ITCR', 'EOITCR', 'AIR');
+
+--Título I
+INSERT INTO elemento_normativo (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
+VALUES (1, NULL, 1, 'I', 'De la Naturaleza, Estructura y Órganos del Instituto Tecnológico de Costa Rica', 1, 1);
+
+--Capítulo I bajo Título I
+INSERT INTO elemento_normativo (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
+VALUES (1, 1, 2, 'I', 'Disposiciones Generales sobre la Naturaleza del Instituto', 1, 1);
+
+--Artículo 1 bajo Capítulo I
+INSERT INTO elemento_normativo (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
+VALUES (1, 2, 3, '1', 'El Instituto Tecnológico de Costa Rica es un ente universitario autónomo...', 1, 1);
+
+--Artículo 2
+INSERT INTO elemento_normativo (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
+VALUES (1, 2, 3, '2', 'Son objetivos del Instituto la enseñanza, investigación y acción social...', 2, 1);
+
+--Capítulo II bajo Título I
+INSERT INTO elemento_normativo (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
+VALUES (1, 1, 2, 'II', 'De la Dirección y Administración del Instituto', 2, 1);
+
+--Artículo 18 bajo Capítulo II
+INSERT INTO elemento_normativo (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
+VALUES (1, 5, 3, '18', 'La Junta Directiva es el órgano colegiado encargado de la administración...', 1, 1);
+
+--Inciso a) bajo Artículo 18
+INSERT INTO elemento_normativo (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
+VALUES (1, 6, 4, 'a)', 'La Junta Directiva estará integrada por siete miembros...', 1, 1);
+
+--Inciso b)
+INSERT INTO elemento_normativo (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
+VALUES (1, 6, 4, 'b)', 'La Junta Directiva sesionará ordinariamente cada mes...', 2, 1);
+
+--Inciso c)
+INSERT INTO elemento_normativo (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
+VALUES (1, 6, 4, 'c)', 'Los miembros gozarán de inmunidad de acción...', 3, 1);
