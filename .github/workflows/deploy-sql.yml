@@ -33,13 +33,12 @@ jobs:
           echo "Rama: ${{ github.ref_name }}"
           echo "Commit: ${{ github.sha }}"
 
-      - name: Instalar sqlcmd
+      - name: Instalar sqlcmd (Go version)
         run: |
-          curl https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
-          curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list > /dev/null
-          sudo apt-get update -y
-          sudo ACCEPT_EULA=Y apt-get install -y mssql-tools18 unixodbc-dev
-          echo "/opt/mssql-tools18/bin" >> $GITHUB_PATH
+          curl -L -o go-sqlcmd.tar.bz2 https://github.com/microsoft/go-sqlcmd/releases/download/v1.6.0/sqlcmd-v1.6.0-linux-x64.tar.bz2
+          tar -xvjf go-sqlcmd.tar.bz2
+          sudo mv sqlcmd /usr/local/bin/
+          sqlcmd --version
 
       - name: Verificar conexion a Azure SQL
         env:
@@ -48,16 +47,27 @@ jobs:
           DB_USER:     ${{ secrets.AZURE_DB_USER }}
           DB_PASSWORD: ${{ secrets.AZURE_DB_PASSWORD }}
         run: |
-          /opt/mssql-tools18/bin/sqlcmd \
+          sqlcmd \
             -S "$DB_SERVER" \
             -d "$DB_NAME" \
             -U "$DB_USER" \
             -P "$DB_PASSWORD" \
             -Q "SELECT @@VERSION AS version, DB_NAME() AS bd, SUSER_SNAME() AS usuario;" \
             -C \
-            -l 30
+            -l 60
+
+      - name: Verificar que proyecto-air.sql tiene contenido
+        run: |
+          if [ ! -s proyecto-air.sql ]; then
+            echo "::warning::El archivo proyecto-air.sql esta vacio. Saltando ejecucion."
+            echo "SKIP_DEPLOY=true" >> $GITHUB_ENV
+          else
+            echo "Archivo con $(wc -l < proyecto-air.sql) lineas. Procediendo con deploy."
+            echo "SKIP_DEPLOY=false" >> $GITHUB_ENV
+          fi
 
       - name: Ejecutar proyecto-air.sql
+        if: env.SKIP_DEPLOY == 'false'
         env:
           DB_SERVER:   ${{ secrets.AZURE_DB_SERVER }}
           DB_NAME:     ${{ secrets.AZURE_DB_NAME }}
@@ -66,7 +76,7 @@ jobs:
         run: |
           echo "Ejecutando proyecto-air.sql contra $DB_SERVER..."
 
-          /opt/mssql-tools18/bin/sqlcmd \
+          sqlcmd \
             -S "$DB_SERVER" \
             -d "$DB_NAME" \
             -U "$DB_USER" \
@@ -79,13 +89,14 @@ jobs:
           echo "Script ejecutado exitosamente."
 
       - name: Validar estado final de la BD
+        if: env.SKIP_DEPLOY == 'false'
         env:
           DB_SERVER:   ${{ secrets.AZURE_DB_SERVER }}
           DB_NAME:     ${{ secrets.AZURE_DB_NAME }}
           DB_USER:     ${{ secrets.AZURE_DB_USER }}
           DB_PASSWORD: ${{ secrets.AZURE_DB_PASSWORD }}
         run: |
-          /opt/mssql-tools18/bin/sqlcmd \
+          sqlcmd \
             -S "$DB_SERVER" \
             -d "$DB_NAME" \
             -U "$DB_USER" \
