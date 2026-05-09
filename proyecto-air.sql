@@ -129,3 +129,18 @@ VALUES (1, 6, 4, 'b)', 'La Junta Directiva sesionará ordinariamente cada mes...
 --Inciso c)
 INSERT INTO elemento_normativo (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES (1, 6, 4, 'c)', 'Los miembros gozarán de inmunidad de acción...', 3, 1);
+
+--Prueba: Caso Artículo 18 - Versionamiento
+
+--1.Verificar que Artículo 18 vigente existe
+SELECT * FROM elemento_normativo WHERE numero_etiqueta = '18' AND id_estado_vigencia = 1;
+
+--2.Insertar reforma al Artículo 18
+INSERT INTO elemento_normativo (id_reglamento, id_elemento_padre, id_nivel_reglamento,
+    numero_etiqueta, contenido_texto, orden, fecha_inicio_vigencia, id_estado_vigencia)
+VALUES (1, 5, 3, '18', 'NUEVO TEXTO DEL ARTÍCULO 18 - Versión reformada 2026', 1, CURRENT_DATE, 1);
+
+--3.Verificar versionamiento automático
+--Resultado esperado: fila antigua = Histórico con fecha_fin, nueva = Vigente sin fecha_fin
+SELECT id_elemento, numero_etiqueta, id_estado_vigencia, fecha_fin_vigencia
+FROM elemento_normativo WHERE numero_etiqueta = '18' ORDER BY fecha_inicio_vigencia DESC;
