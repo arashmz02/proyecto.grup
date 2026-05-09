@@ -1,5 +1,5 @@
 name: Aplicar Script SQL a Azure
-
+ 
 on:
   push:
     branches:
@@ -7,55 +7,72 @@ on:
       - main
     paths:
       - 'proyecto-air.sql'
-
+ 
   workflow_dispatch:
     inputs:
       confirmar:
         description: 'Escriba SI para confirmar la ejecucion manual'
         required: true
         default: 'NO'
-
+ 
 jobs:
   aplicar-sql:
     name: Ejecutar proyecto-air.sql en Azure
     runs-on: ubuntu-latest
-
+ 
     if: github.event_name == 'push' || github.event.inputs.confirmar == 'SI'
-
+ 
+    env:
+      # Centralizamos las variables aca para no repetirlas en cada step
+      DB_SERVER:   ${{ secrets.AZURE_DB_SERVER }}
+      DB_NAME:     ${{ secrets.AZURE_DB_NAME }}
+      DB_USER:     ${{ secrets.AZURE_DB_USER }}
+      DB_PASSWORD: ${{ secrets.AZURE_DB_PASSWORD }}
+ 
     steps:
       - name: Clonar repositorio
         uses: actions/checkout@v4
-
+ 
       - name: Mostrar informacion del trigger
         run: |
           echo "Disparado por: ${{ github.actor }}"
           echo "Evento: ${{ github.event_name }}"
           echo "Rama: ${{ github.ref_name }}"
           echo "Commit: ${{ github.sha }}"
-
+ 
       - name: Instalar sqlcmd (Go version)
         run: |
           curl -L -o go-sqlcmd.tar.bz2 https://github.com/microsoft/go-sqlcmd/releases/download/v1.6.0/sqlcmd-v1.6.0-linux-x64.tar.bz2
           tar -xvjf go-sqlcmd.tar.bz2
           sudo mv sqlcmd /usr/local/bin/
           sqlcmd --version
-
-      - name: Verificar conexion a Azure SQL
-        env:
-          DB_SERVER:   ${{ secrets.AZURE_DB_SERVER }}
-          DB_NAME:     ${{ secrets.AZURE_DB_NAME }}
-          DB_USER:     ${{ secrets.AZURE_DB_USER }}
-          DB_PASSWORD: ${{ secrets.AZURE_DB_PASSWORD }}
+ 
+      - name: Despertar BD y verificar conexion (con retry)
         run: |
-          sqlcmd \
-            -S "$DB_SERVER" \
-            -d "$DB_NAME" \
-            -U "$DB_USER" \
-            -P "$DB_PASSWORD" \
-            -Q "SELECT @@VERSION AS version, DB_NAME() AS bd, SUSER_SNAME() AS usuario;" \
-            -C \
-            -l 60
-
+          echo "La BD free puede estar auto-pausada. Reintentando hasta que despierte..."
+          for intento in 1 2 3 4 5 6; do
+            echo "::group::Intento $intento de 6"
+            if sqlcmd \
+                -S "$DB_SERVER" \
+                -d "$DB_NAME" \
+                -U "$DB_USER" \
+                -P "$DB_PASSWORD" \
+                -Q "SELECT 'Conexion OK' AS estado, DB_NAME() AS bd, SUSER_SNAME() AS usuario;" \
+                -C \
+                -l 60 \
+                -t 60; then
+              echo "::endgroup::"
+              echo "✅ Conexion exitosa en el intento $intento"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "⏳ Conexion fallo (BD probablemente pausada). Esperando 30s..."
+            sleep 30
+          done
+          echo "❌ No se pudo conectar tras 6 intentos (~3 minutos)."
+          echo "Revisar: secrets, firewall, estado de la BD en el portal de Azure."
+          exit 1
+ 
       - name: Verificar que proyecto-air.sql tiene contenido
         run: |
           if [ ! -s proyecto-air.sql ]; then
@@ -65,36 +82,39 @@ jobs:
             echo "Archivo con $(wc -l < proyecto-air.sql) lineas. Procediendo con deploy."
             echo "SKIP_DEPLOY=false" >> $GITHUB_ENV
           fi
-
-      - name: Ejecutar proyecto-air.sql
+ 
+      - name: Ejecutar proyecto-air.sql (con retry de wake-up)
         if: env.SKIP_DEPLOY == 'false'
-        env:
-          DB_SERVER:   ${{ secrets.AZURE_DB_SERVER }}
-          DB_NAME:     ${{ secrets.AZURE_DB_NAME }}
-          DB_USER:     ${{ secrets.AZURE_DB_USER }}
-          DB_PASSWORD: ${{ secrets.AZURE_DB_PASSWORD }}
         run: |
-          echo "Ejecutando proyecto-air.sql contra $DB_SERVER..."
-
-          sqlcmd \
-            -S "$DB_SERVER" \
-            -d "$DB_NAME" \
-            -U "$DB_USER" \
-            -P "$DB_PASSWORD" \
-            -i proyecto-air.sql \
-            -C \
-            -l 60 \
-            -b
-
-          echo "Script ejecutado exitosamente."
-
+          echo "Ejecutando proyecto-air.sql contra $DB_SERVER / $DB_NAME..."
+ 
+          # La BD puede haberse pausado de nuevo entre steps.
+          # Reintentamos la ejecucion del script si falla por pausa.
+          for intento in 1 2 3; do
+            echo "::group::Intento de ejecucion $intento de 3"
+            if sqlcmd \
+                -S "$DB_SERVER" \
+                -d "$DB_NAME" \
+                -U "$DB_USER" \
+                -P "$DB_PASSWORD" \
+                -i proyecto-air.sql \
+                -C \
+                -l 60 \
+                -t 120 \
+                -b; then
+              echo "::endgroup::"
+              echo "✅ Script ejecutado exitosamente en el intento $intento."
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "⏳ Ejecucion fallo. Esperando 30s antes de reintentar..."
+            sleep 30
+          done
+          echo "❌ La ejecucion del script fallo tras 3 intentos."
+          exit 1
+ 
       - name: Validar estado final de la BD
         if: env.SKIP_DEPLOY == 'false'
-        env:
-          DB_SERVER:   ${{ secrets.AZURE_DB_SERVER }}
-          DB_NAME:     ${{ secrets.AZURE_DB_NAME }}
-          DB_USER:     ${{ secrets.AZURE_DB_USER }}
-          DB_PASSWORD: ${{ secrets.AZURE_DB_PASSWORD }}
         run: |
           sqlcmd \
             -S "$DB_SERVER" \
@@ -102,18 +122,27 @@ jobs:
             -U "$DB_USER" \
             -P "$DB_PASSWORD" \
             -Q "SELECT COUNT(*) AS total_tablas FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'; SELECT COUNT(*) AS total_triggers FROM sys.triggers;" \
-            -C
-
+            -C \
+            -l 60
+ 
       - name: Reporte de exito
         if: success()
         run: |
-          echo "## Deploy exitoso" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Deploy exitoso" >> $GITHUB_STEP_SUMMARY
           echo "El script proyecto-air.sql se ejecuto correctamente sobre Azure SQL Database." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Disparado por:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-
+          echo "**Rama:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+ 
       - name: Reporte de falla
         if: failure()
         run: |
-          echo "## Deploy fallo" >> $GITHUB_STEP_SUMMARY
+          echo "## ❌ Deploy fallo" >> $GITHUB_STEP_SUMMARY
           echo "El script no pudo ejecutarse sobre Azure. Revisa los logs arriba." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Posibles causas:**" >> $GITHUB_STEP_SUMMARY
+          echo "- BD agoto los 100k vCore-segundos del mes (free tier)" >> $GITHUB_STEP_SUMMARY
+          echo "- Error de sintaxis en proyecto-air.sql" >> $GITHUB_STEP_SUMMARY
+          echo "- Cambios en credenciales o firewall del server" >> $GITHUB_STEP_SUMMARY
+ 
