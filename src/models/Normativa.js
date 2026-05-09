@@ -5,7 +5,7 @@ class Normativa {
     constructor(conexionBD) {
         this.bd = conexionBD;
     }
-/* 1: Obtener el arbol completo de un reglamento */
+// 1: Obtener el arbol completo de un reglamento 
     async obtenerArbolReglamento(id_reglamento) {
         const sql = `
             WITH RECURSIVE arbol AS (
@@ -58,7 +58,7 @@ class Normativa {
         }
     }
 
-/*2: Obtener los hijos directos de un elemento*/
+// 2: Obtener los hijos directos de un elemento
     async obtenerHijos(id_elemento_padre) {
         const sql = `
             SELECT *
@@ -80,7 +80,7 @@ class Normativa {
         }
     }
 
-/*3: Obtén qué versión estaba vigente en cierta fecha*/
+// 3: Obtén qué versión estaba vigente en cierta fecha
     async obtenerArticuloEnFecha(id_elemento, fecha_consulta) {
         const sql = `
             SELECT *
@@ -99,7 +99,7 @@ class Normativa {
         }
     }
 
-/*4: CREAR UN NUEVO ELEMENTO*/
+// 4: CREAR UN NUEVO ELEMENTO
     async crearElemento(datos) {
         const {
             id_reglamento,
@@ -147,7 +147,7 @@ class Normativa {
         }
     }
 
-/*5: Obten el historial de un elemento*/
+// 5: Obten el historial de un elemento
     async obtenerHistorial(id_elemento) {
         const sql = `
             SELECT *
@@ -164,7 +164,7 @@ class Normativa {
         }
     }
 
-/*6: Obtener información de un elemento específico*/
+// 6: Obtener información de un elemento específico
     async obtenerElemento(id_elemento) {
         const sql = `
             SELECT 

@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crear Elemento Normativo - AIR</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+
+        .contenedor {
+            max-width: 700px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h2 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .grupo-formulario {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #555;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 5px rgba(0,123,255,0.5);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        button:active {
+            background: #003d82;
+        }
+
+        #mensaje {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            display: none;
+            font-weight: bold;
+        }
+
+        #mensaje.exito {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        #mensaje.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .nota {
+            background: #e7f3ff;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #004085;
+            margin-top: 5px;
+        }
+
+        a {
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="contenedor">
+        <h2>✏️ Crear o Reformar Elemento Normativo</h2>
+
+        <form id="form-elemento">
+            
+            <div class="grupo-formulario">
+                <label for="reglamento">
+                    <strong>Reglamento:</strong> <span style="color:red;">*</span>
+                </label>
+                <select id="reglamento" name="id_reglamento" required>
+                    <option value="">-- Selecciona un reglamento --</option>
+                    <option value="1">Estatuto Orgánico del ITCR</option>
+                    <option value="2">Reglamento de la AIR</option>
+                </select>
+                <div class="nota">Selecciona a qué reglamento pertenecerá este elemento</div>
+            </div>
+
+            <div class="grupo-formulario">
+                <label for="nivel">
+                    <strong>Tipo de Elemento:</strong> <span style="color:red;">*</span>
+                </label>
+                <select id="nivel" name="id_nivel_reglamento" required onchange="actualizarPadres()">
+                    <option value="">-- Selecciona el tipo --</option>
+                    <option value="1">🏛️ Título</option>
+                    <option value="2">📘 Capítulo</option>
+                    <option value="3">📄 Artículo</option>
+                    <option value="4">→ Inciso</option>
+                    <option value="5">→→ Sub-inciso</option>
+                </select>
+                <div class="nota">Elige qué tipo de elemento vas a crear</div>
+            </div>
+
+            <div class="grupo-formulario" id="grupo-padre" style="display:none;">
+                <label for="padre">
+                    <strong>Elemento Padre:</strong> <span style="color:red;">*</span>
+                </label>
+                <select id="padre" name="id_elemento_padre">
+                    <option value="">-- Selecciona el padre --</option>
+                </select>
+                <div class="nota">Selecciona bajo qué elemento colgará este</div>
+            </div>
+
+            <div class="grupo-formulario">
+                <label for="numero">
+                    <strong>Número/Etiqueta:</strong> <span style="color:red;">*</span>
+                </label>
+                <input type="text" id="numero" name="numero_etiqueta" required 
+                       placeholder="Ej: 18, a), i., I.1.a.">
+                <div class="nota">El número visible del elemento (18, a), etc.)</div>
+            </div>
+
+            <div class="grupo-formulario">
+                <label for="orden">
+                    <strong>Orden (posición):</strong> <span style="color:red;">*</span>
+                </label>
+                <input type="number" id="orden" name="orden" required value="1" min="1">
+                <div class="nota">La posición entre sus hermanos (1, 2, 3, ...)</div>
+            </div>
+
+            <div class="grupo-formulario">
+                <label for="contenido">
+                    <strong>Contenido del Texto:</strong> <span style="color:red;">*</span>
+                </label>
+                <textarea id="contenido" name="contenido_texto" required 
+                          placeholder="Escribe el texto completo del artículo, inciso, etc."></textarea>
+                <div class="nota">El texto completo que aparecerá en el reglamento</div>
+            </div>
+
+            <button type="submit">✅ Crear Elemento</button>
+        </form>
+
+        <div id="mensaje"></div>
+
+        <div style="margin-top: 30px; text-align: center;">
+            <a href="/normativa/arbol.html">← Volver al Árbol</a>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('form-elemento');
+        const selectNivel = document.getElementById('nivel');
+        const selectPadre = document.getElementById('padre');
+        const grupoPadre = document.getElementById('grupo-padre');
+
+//Cuando cambias el nivel, actualiza los padres disponibles
+        function actualizarPadres() {
+            const nivelSeleccionado = parseInt(selectNivel.value);
+
+            if (nivelSeleccionado === 1 || nivelSeleccionado === 0 || nivelSeleccionado === '') {
+//Título no tiene padre
+                grupoPadre.style.display = 'none';
+                selectPadre.value = '';
+            } else {
+//Los demas niveles si tienen padre
+                grupoPadre.style.display = 'block';
+                cargarPadresCandidatos(nivelSeleccionado - 1);
+            }
+        }
+
+//Carga los elementos que PUEDEN ser padres
+        async function cargarPadresCandidatos(nivelPadre) {
+            try {
+                const reglamento = document.getElementById('reglamento').value;
+                if (!reglamento) {
+                    selectPadre.innerHTML = '<option value="">-- Primero selecciona un reglamento --</option>';
+                    return;
+                }
+
+//Aqui haríamos una solicitud al servidor para obtener los posibles padres
+                selectPadre.innerHTML = `
+                    <option value="">-- Cargando padres disponibles... --</option>
+                `;
+            } catch (error) {
+                console.error("Error al cargar padres:", error);
+            }
+        }
+
+//Maneja el envío del formulario
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const datos = {
+                id_reglamento: parseInt(document.getElementById('reglamento').value),
+                id_elemento_padre: document.getElementById('padre').value 
+                    ? parseInt(document.getElementById('padre').value) 
+                    : null,
+                id_nivel_reglamento: parseInt(selectNivel.value),
+                numero_etiqueta: document.getElementById('numero').value.trim(),
+                contenido_texto: document.getElementById('contenido').value.trim(),
+                orden: parseInt(document.getElementById('orden').value)
+            };
+//Validaciones basicas
+            if (!datos.id_reglamento) {
+                mostrarMensaje("Por favor selecciona un reglamento", "error");
+                return;
+            }
+
+            if (!datos.id_nivel_reglamento) {
+                mostrarMensaje("Por favor selecciona el tipo de elemento", "error");
+                return;
+            }
+
+            if (!datos.numero_etiqueta) {
+                mostrarMensaje("Por favor ingresa el número/etiqueta", "error");
+                return;
+            }
+
+            if (!datos.contenido_texto) {
+                mostrarMensaje("Por favor ingresa el contenido", "error");
+                return;
+            }
+
+            if (datos.orden < 1) {
+                mostrarMensaje("El orden debe ser mayor a 0", "error");
+                return;
+            }
+
+            try {
+//Envia al servidor
+                const response = await fetch('/api/elementos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(datos)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    mostrarMensaje('✓ ' + result.mensaje, 'exito');
+                    form.reset();
+                    setTimeout(() => {
+                        window.location.href = '/normativa/arbol.html';
+                    }, 2000);
+                } else {
+                    mostrarMensaje('✗ Error: ' + result.error, 'error');
+                }
+            } catch (error) {
+                console.error("Error:", error);
+                mostrarMensaje('✗ Error al enviar: ' + error.message, 'error');
+            }
+        });
+
+//Muestra un mensaje en la página
+        function mostrarMensaje(texto, tipo) {
+            const mensajeDiv = document.getElementById('mensaje');
+            mensajeDiv.textContent = texto;
+            mensajeDiv.className = tipo;
+            mensajeDiv.style.display = 'block';
+        }
+
+//Al cargar la página
+        window.addEventListener('DOMContentLoaded', () => {
+//Inicialmente oculta el grupo de padres
+            grupoPadre.style.display = 'none';
+        });
+    </script>
+</body>
+</html>
