@@ -4,7 +4,7 @@
    Instituto Tecnologico de Costa Rica - Bases de Datos
    Sprint 2: Cimientos y Estructura de Datos
 
-   Motor: Azure SQL Database (Lenguaje: T-SQL)
+   Motor: Azure SQL Database (T-SQL)
    Estrategia: DROP & RECREATE - el script deja la BD en un
    estado limpio y reproducible en cada ejecucion.
 
@@ -415,15 +415,22 @@ GO
    'Historico' la version anterior con la misma etiqueta y mismo
    padre dentro del mismo reglamento, y le pone fecha_fin_vigencia.
 
-   Migracion: el original era BEFORE INSERT FOR EACH ROW. En
-   T-SQL se usa AFTER INSERT y se procesa el conjunto INSERTED.
-   El UPDATE de versiones previas excluye explicitamente las
-   filas recien insertadas (i.id_elemento).
+   Migracion: el original era BEFORE INSERT FOR EACH ROW.
+
+   IMPORTANTE - por que INSTEAD OF y no AFTER:
+   El Partial Unique Index uq_etiqueta_vigente se valida DURANTE
+   el INSERT. Un trigger AFTER correria DESPUES de esa validacion,
+   asi que el indice rechazaria la reforma antes de que el trigger
+   pudiera archivar la version anterior. La unica forma de que el
+   versionamiento funcione es archivar la version vieja ANTES de
+   insertar la nueva. Eso exige INSTEAD OF INSERT: el trigger
+   toma el control, primero marca como Historico lo anterior, y
+   recien entonces hace el INSERT real de las filas nuevas.
    ------------------------------------------------------------ */
 GO
 CREATE TRIGGER tg_vigencia_normativa
 ON elemento_normativo
-AFTER INSERT
+INSTEAD OF INSERT
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -431,17 +438,32 @@ BEGIN
     DECLARE @estado_vigente   INT = (SELECT id_estado_vigencia FROM catalogo_estado_vigencia WHERE nombre = 'Vigente');
     DECLARE @estado_historico INT = (SELECT id_estado_vigencia FROM catalogo_estado_vigencia WHERE nombre = 'Historico');
 
+    -- Paso 1: archivar las versiones vigentes anteriores que seran
+    -- reemplazadas por una fila nueva tambien marcada como Vigente.
     UPDATE en
     SET en.id_estado_vigencia = @estado_historico,
         en.fecha_fin_vigencia = CAST(SYSUTCDATETIME() AS DATE)
     FROM elemento_normativo en
     JOIN inserted i
-      ON  en.id_reglamento  = i.id_reglamento
-      AND en.padre_norm     = i.padre_norm
+      ON  en.id_reglamento   = i.id_reglamento
+      AND en.padre_norm      = ISNULL(i.id_elemento_padre, 0)
       AND en.numero_etiqueta = i.numero_etiqueta
     WHERE en.id_estado_vigencia = @estado_vigente
-      AND i.id_estado_vigencia  = @estado_vigente
-      AND en.id_elemento <> i.id_elemento;
+      AND i.id_estado_vigencia  = @estado_vigente;
+
+    -- Paso 2: insertar realmente las filas nuevas. Para entonces
+    -- el indice uq_etiqueta_vigente ya no encuentra conflicto.
+    INSERT INTO elemento_normativo
+        (id_reglamento, id_elemento_padre, id_nivel_reglamento,
+         numero_etiqueta, contenido_texto, orden,
+         fecha_inicio_vigencia, fecha_fin_vigencia,
+         id_estado_vigencia, id_acuerdo_origen)
+    SELECT
+        id_reglamento, id_elemento_padre, id_nivel_reglamento,
+        numero_etiqueta, contenido_texto, orden,
+        fecha_inicio_vigencia, fecha_fin_vigencia,
+        id_estado_vigencia, id_acuerdo_origen
+    FROM inserted;
 END;
 GO
 
@@ -685,16 +707,21 @@ GO
 
 
 /* ---- 8.4 Datos semilla del Estatuto Organico (Josue - Issue #10)
-   Arbol de ejemplo. Como las tablas usan IDENTITY, se capturan
-   los ids generados en variables en lugar de asumir valores
-   fijos. Esto hace el script robusto ante re-ejecuciones. */
+   Arbol de ejemplo.
+
+   IMPORTANTE: la tabla elemento_normativo tiene un trigger
+   INSTEAD OF INSERT, por lo que SCOPE_IDENTITY() NO funciona aqui
+   (devolveria NULL: el INSERT real ocurre dentro del trigger, en
+   otro scope). Por eso cada id se recupera con un SELECT por su
+   clave natural: reglamento + etiqueta + padre. Es mas verboso
+   pero es la forma correcta y robusta de sembrar el arbol. */
 
 INSERT INTO reglamento (nombre_normativa, sigla, emisor) VALUES
     ('Estatuto Organico del ITCR', 'EOITCR', 'AIR');
-DECLARE @id_reg INT = SCOPE_IDENTITY();
-
 INSERT INTO reglamento (nombre_normativa, sigla, emisor) VALUES
     ('Reglamento de la AIR', 'RAIR', 'AIR');
+
+DECLARE @id_reg INT = (SELECT id_reglamento FROM reglamento WHERE sigla = 'EOITCR');
 
 -- ids de niveles y estado
 DECLARE @niv_titulo   INT = (SELECT id_nivel_reglamento FROM catalogo_nivel_reglamento WHERE nombre = 'Titulo');
@@ -703,19 +730,23 @@ DECLARE @niv_articulo INT = (SELECT id_nivel_reglamento FROM catalogo_nivel_regl
 DECLARE @niv_inciso   INT = (SELECT id_nivel_reglamento FROM catalogo_nivel_reglamento WHERE nombre = 'Inciso');
 DECLARE @est_vigente  INT = (SELECT id_estado_vigencia  FROM catalogo_estado_vigencia  WHERE nombre = 'Vigente');
 
--- Titulo II
+-- Titulo II (raiz, sin padre)
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
     (@id_reg, NULL, @niv_titulo, 'II', 'De la Estructura Organica', 2, @est_vigente);
-DECLARE @id_titulo2 INT = SCOPE_IDENTITY();
+DECLARE @id_titulo2 INT = (
+    SELECT id_elemento FROM elemento_normativo
+    WHERE id_reglamento = @id_reg AND id_elemento_padre IS NULL AND numero_etiqueta = 'II');
 
 -- Capitulo I dentro del Titulo II
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
     (@id_reg, @id_titulo2, @niv_capitulo, 'I', 'De la Asamblea Institucional Representativa', 1, @est_vigente);
-DECLARE @id_cap1 INT = SCOPE_IDENTITY();
+DECLARE @id_cap1 INT = (
+    SELECT id_elemento FROM elemento_normativo
+    WHERE id_reglamento = @id_reg AND id_elemento_padre = @id_titulo2 AND numero_etiqueta = 'I');
 
 -- Articulo 18 dentro del Capitulo I
 INSERT INTO elemento_normativo
@@ -724,7 +755,9 @@ VALUES
     (@id_reg, @id_cap1, @niv_articulo, '18',
      'La Asamblea Institucional Representativa es el organo de mayor jerarquia del Instituto.',
      1, @est_vigente);
-DECLARE @id_art18 INT = SCOPE_IDENTITY();
+DECLARE @id_art18 INT = (
+    SELECT id_elemento FROM elemento_normativo
+    WHERE id_reglamento = @id_reg AND id_elemento_padre = @id_cap1 AND numero_etiqueta = '18');
 
 -- Incisos del Articulo 18
 INSERT INTO elemento_normativo
@@ -734,7 +767,7 @@ VALUES
     (@id_reg, @id_art18, @niv_inciso, 'b)', 'Conocer y resolver sobre los recursos de su competencia.', 2, @est_vigente),
     (@id_reg, @id_art18, @niv_inciso, 'c)', 'Las demas que le asigne el Estatuto Organico.', 3, @est_vigente);
 
--- Articulo 19
+-- Articulo 19 dentro del Capitulo I
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
@@ -742,19 +775,25 @@ VALUES
      'La Asamblea Institucional Representativa estara constituida segun lo defina el reglamento.',
      2, @est_vigente);
 
--- Titulo III (segundo titulo, para cumplir el minimo del plan)
+-- Titulo III (segundo titulo raiz, para cumplir el minimo del plan)
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
     (@id_reg, NULL, @niv_titulo, 'III', 'De los Organos de Gobierno', 3, @est_vigente);
-DECLARE @id_titulo3 INT = SCOPE_IDENTITY();
+DECLARE @id_titulo3 INT = (
+    SELECT id_elemento FROM elemento_normativo
+    WHERE id_reglamento = @id_reg AND id_elemento_padre IS NULL AND numero_etiqueta = 'III');
 
+-- Capitulo I dentro del Titulo III
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
     (@id_reg, @id_titulo3, @niv_capitulo, 'I', 'Del Consejo Institucional', 1, @est_vigente);
-DECLARE @id_cap3_1 INT = SCOPE_IDENTITY();
+DECLARE @id_cap3_1 INT = (
+    SELECT id_elemento FROM elemento_normativo
+    WHERE id_reglamento = @id_reg AND id_elemento_padre = @id_titulo3 AND numero_etiqueta = 'I');
 
+-- Articulos dentro del Capitulo I del Titulo III
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
