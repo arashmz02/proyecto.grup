@@ -1,0 +1,30 @@
+﻿# ============================================================
+# .gitignore - SGL-AIR
+# ============================================================
+
+# Credenciales y variables de entorno
+.env
+
+# Compilados de Java / Maven
+target/
+*.class
+*.war
+
+# Logs
+logs/
+*.log
+
+# Archivos temporales de IDEs
+.vscode/
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Node (si se llega a usar)
+node_modules/
