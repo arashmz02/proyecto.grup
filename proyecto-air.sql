@@ -599,7 +599,7 @@ GO
    generado con BCrypt (coste 10). Cambiarlo de inmediato. */
 INSERT INTO sys_usuario (username, password_hash, email, activo) VALUES
     ('admin',
-     '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
+     '$2a$12$Dml3HUlko1YRJBX5u1hzp.c.IoHYbsoDK9f3q5Pu7bKsggek8N7lu',
      'admin@itcr.ac.cr',
      1);
 GO
