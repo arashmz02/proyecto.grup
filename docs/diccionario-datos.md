@@ -1,3 +1,4 @@
+feature/issue-10-jerarquia-normativa
 # Diccionario de Datos - Módulo de Jerarquía Normativa (Issue #10)
 
 ## Tabla: catalogo_nivel_reglamento
@@ -46,5 +47,5 @@
 | id_estado_vigencia | INT NOT NULL | FK a catalogo_estado_vigencia.id_estado_vigencia |
 | id_acuerdo_origen | INT | FK opcional a futura tabla resolucion |
 
----
+
 

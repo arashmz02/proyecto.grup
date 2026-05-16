@@ -1,16 +1,17 @@
-/* 5. MODULO DE JERARQUIA NORMATIVA
-   Responsable: Josue - Issue #10 */
+
 CREATE TABLE catalogo_nivel_reglamento (
     id_nivel_reglamento INT IDENTITY(1,1) PRIMARY KEY,
     nombre              NVARCHAR(40) NOT NULL UNIQUE,
     orden               INT NOT NULL
 );
 GO
+
 CREATE TABLE catalogo_estado_vigencia (
     id_estado_vigencia INT IDENTITY(1,1) PRIMARY KEY,
     nombre             NVARCHAR(20) NOT NULL UNIQUE
 );
 GO
+
 CREATE TABLE reglamento (
     id_reglamento    INT IDENTITY(1,1) PRIMARY KEY,
     nombre_normativa NVARCHAR(150) NOT NULL,
@@ -18,6 +19,7 @@ CREATE TABLE reglamento (
     emisor           NVARCHAR(10)  CHECK (emisor IN ('AIR', 'CI'))
 );
 GO
+
 CREATE TABLE elemento_normativo (
     id_elemento           INT IDENTITY(1,1) PRIMARY KEY,
     id_reglamento         INT NOT NULL,
@@ -36,9 +38,7 @@ CREATE TABLE elemento_normativo (
     CONSTRAINT fk_elemento_estado     FOREIGN KEY (id_estado_vigencia)  REFERENCES catalogo_estado_vigencia(id_estado_vigencia)
 );
 GO
-/* REGLA DE ORO: Partial Unique Index (Filtered Index en T-SQL)
-   Garantiza que no existan dos elementos hermanos marcados como
-   'Vigente' con la misma etiqueta dentro del mismo reglamento.
+
    Nota de migracion PostgreSQL -> T-SQL:
    - En PostgreSQL se usaba COALESCE(id_elemento_padre, 0) dentro
      del indice y una subconsulta en el WHERE.
@@ -51,9 +51,7 @@ GO
        b) Para tratar los elementos raiz (id_elemento_padre NULL)
           como hermanos entre si, se agrega la columna calculada
           persistida 'padre_norm' que convierte NULL en 0. */
-ALTER TABLE elemento_normativo
-    ADD padre_norm AS (ISNULL(id_elemento_padre, 0)) PERSISTED;
-GO
+
 CREATE UNIQUE INDEX uq_etiqueta_vigente
     ON elemento_normativo (id_reglamento, padre_norm, numero_etiqueta)
     WHERE id_estado_vigencia = 1;   -- 1 = 'Vigente' (ver datos semilla)
@@ -114,7 +112,6 @@ BEGIN
     FROM inserted;
 END;
 GO
-
 
 
 /* 8.3 Catalogos de normativa (Josue - Issue #10) 
@@ -225,4 +222,3 @@ VALUES
      'El Consejo Institucional es el organo directivo superior del Instituto.', 1, @est_vigente),
     (@id_reg, @id_cap3_1, @niv_articulo, '21',
      'El Consejo Institucional estara integrado conforme al Estatuto Organico.', 2, @est_vigente);
-GO
