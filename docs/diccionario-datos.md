@@ -55,3 +55,22 @@ Tabla para manejar catálogos reutilizables del sistema, como sectores, puestos 
 | descripcion | VARCHAR/NVARCHAR | NULL | Descripción |
 | activo | BIT | DEFAULT | Indica si está activo |
 
+## Tabla: bitacora_cedula
+
+Tabla utilizada para registrar cambios históricos relacionados con números de cédula dentro del sistema.
+
+| Campo | Tipo | Restricción | Descripción |
+|---|---|---|---|
+| id_bitacora | INT | PK, IDENTITY | Identificador del registro |
+| tabla_origen | NVARCHAR(100) | NOT NULL | Tabla donde ocurrió el cambio |
+| id_registro | INT | NOT NULL | Registro afectado |
+| cedula_anterior | NVARCHAR(30) | NULL | Valor anterior de la cédula |
+| cedula_nueva | NVARCHAR(30) | NOT NULL | Nuevo valor de la cédula |
+| usuario_modificacion | INT | FK | Usuario que realizó el cambio |
+| fecha_modificacion | DATETIME2 | DEFAULT SYSUTCDATETIME() | Fecha del cambio |
+| observacion | NVARCHAR(255) | NULL | Motivo o comentario del cambio |
+
+## Trigger: trg_bitacora_cedula
+
+Trigger encargado de registrar automáticamente cualquier modificación realizada sobre números de cédula en entidades sensibles del sistema.
+
