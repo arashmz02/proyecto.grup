@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    web.xml - Descriptor de despliegue de la aplicacion web.
+
+    Los servlets NO se declaran aqui porque usan la anotacion
+    @WebServlet (ver AuthController.java). Este archivo solo
+    define configuracion general de la aplicacion.
+-->
+<web-app xmlns="https://jakarta.ee/xml/ns/jakartaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee
+                             https://jakarta.ee/xml/ns/jakartaee/web-app_6_0.xsd"
+         version="6.0">
+
+    <display-name>Sistema de Gestion Legislativa AIR</display-name>
+
+    <!-- Pagina de bienvenida: al entrar a la raiz del sitio,
+         redirige al login mediante index.jsp -->
+    <welcome-file-list>
+        <welcome-file>index.jsp</welcome-file>
+    </welcome-file-list>
+
+    <!-- Tiempo de vida de sesion por defecto: 30 minutos -->
+    <session-config>
+        <session-timeout>30</session-timeout>
+    </session-config>
+
+</web-app>
