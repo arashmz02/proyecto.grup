@@ -1,4 +1,4 @@
-/* ============================================================
+/* 
    PROYECTO-AIR.SQL
    Sistema de Gestion Legislativa AIR (SGL-AIR)
    Instituto Tecnologico de Costa Rica - Bases de Datos
@@ -16,16 +16,13 @@
      5. Modulo de Jerarquia Normativa      (Josue  - Issue #10)
      6. Control de Folios y Certificaciones(Arash  - Issue #1)
      7. Triggers
-     8. Datos semilla
-   ============================================================ */
+     8. Datos semilla */
 
 
-/* ============================================================
-   1. LIMPIEZA - DROP EN ORDEN INVERSO
-   Se eliminan primero los objetos que dependen de otros.
-   ============================================================ */
+/* 1. LIMPIEZA - DROP EN ORDEN INVERSO
+   Se eliminan primero los objetos que dependen de otros. */
 
--- Triggers
+--Triggers
 IF OBJECT_ID('tg_cambio_identidad', 'TR')      IS NOT NULL DROP TRIGGER tg_cambio_identidad;
 IF OBJECT_ID('tg_folio_secuencial', 'TR')      IS NOT NULL DROP TRIGGER tg_folio_secuencial;
 IF OBJECT_ID('tg_vigencia_normativa', 'TR')    IS NOT NULL DROP TRIGGER tg_vigencia_normativa;
@@ -33,7 +30,7 @@ IF OBJECT_ID('tg_traslape_sector', 'TR')       IS NOT NULL DROP TRIGGER tg_trasl
 IF OBJECT_ID('tg_auditoria_nombramiento', 'TR')IS NOT NULL DROP TRIGGER tg_auditoria_nombramiento;
 IF OBJECT_ID('tg_auditoria_asambleista', 'TR') IS NOT NULL DROP TRIGGER tg_auditoria_asambleista;
 
--- Tablas (hijas antes que padres)
+--Tablas (hijas antes que padres)
 IF OBJECT_ID('certificacion_emitida', 'U')     IS NOT NULL DROP TABLE certificacion_emitida;
 IF OBJECT_ID('control_folio', 'U')             IS NOT NULL DROP TABLE control_folio;
 IF OBJECT_ID('elemento_normativo', 'U')        IS NOT NULL DROP TABLE elemento_normativo;
@@ -53,10 +50,8 @@ IF OBJECT_ID('sys_rol', 'U')                   IS NOT NULL DROP TABLE sys_rol;
 GO
 
 
-/* ============================================================
-   2. MODULO DE SEGURIDAD Y ROLES (sys_*)
-   Responsable: Frank - Issue #0
-   ============================================================ */
+/* 2. MODULO DE SEGURIDAD Y ROLES (sys_*)
+   Responsable: Frank - Issue #0 */
 
 CREATE TABLE sys_rol (
     id_rol      INT IDENTITY(1,1) PRIMARY KEY,
@@ -112,12 +107,10 @@ CREATE TABLE sys_log_auditoria (
 GO
 
 
-/* ============================================================
-   3. CATALOGO MAESTRO (Universal Lookup Table)
+/* 3. CATALOGO MAESTRO (Universal Lookup Table)
    Responsable: Arash - Issue #1
    Se crea antes del modulo de identidad porque 'nombramiento'
-   referencia este catalogo (id_sector, id_puesto).
-   ============================================================ */
+   referencia este catalogo (id_sector, id_puesto). */
 
 CREATE TABLE catalogo_maestro (
     id_item        INT IDENTITY(1,1) PRIMARY KEY,
@@ -129,10 +122,8 @@ CREATE TABLE catalogo_maestro (
 GO
 
 
-/* ============================================================
-   4. MODULO DE IDENTIDAD Y NOMBRAMIENTOS
-   Responsable: Frank - Issue #9
-   ============================================================ */
+/* 4. MODULO DE IDENTIDAD Y NOMBRAMIENTOS
+   Responsable: Frank - Issue #9 */
 
 CREATE TABLE asambleista (
     id_asambleista       INT IDENTITY(1,1) PRIMARY KEY,
@@ -173,10 +164,8 @@ CREATE TABLE nombramiento (
 GO
 
 
-/* ============================================================
-   5. MODULO DE JERARQUIA NORMATIVA
-   Responsable: Josue - Issue #10
-   ============================================================ */
+/* 5. MODULO DE JERARQUIA NORMATIVA
+   Responsable: Josue - Issue #10 */
 
 CREATE TABLE catalogo_nivel_reglamento (
     id_nivel_reglamento INT IDENTITY(1,1) PRIMARY KEY,
@@ -218,8 +207,7 @@ CREATE TABLE elemento_normativo (
 );
 GO
 
-/* ------------------------------------------------------------
-   REGLA DE ORO: Partial Unique Index (Filtered Index en T-SQL)
+/* REGLA DE ORO: Partial Unique Index (Filtered Index en T-SQL)
    Garantiza que no existan dos elementos hermanos marcados como
    'Vigente' con la misma etiqueta dentro del mismo reglamento.
 
@@ -234,8 +222,7 @@ GO
           corresponde a 'Vigente'.
        b) Para tratar los elementos raiz (id_elemento_padre NULL)
           como hermanos entre si, se agrega la columna calculada
-          persistida 'padre_norm' que convierte NULL en 0.
-   ------------------------------------------------------------ */
+          persistida 'padre_norm' que convierte NULL en 0. */
 
 ALTER TABLE elemento_normativo
     ADD padre_norm AS (ISNULL(id_elemento_padre, 0)) PERSISTED;
@@ -247,10 +234,8 @@ CREATE UNIQUE INDEX uq_etiqueta_vigente
 GO
 
 
-/* ============================================================
-   6. CONTROL DE FOLIOS Y CERTIFICACIONES
-   Responsable: Arash - Issue #1
-   ============================================================ */
+/* 6. CONTROL DE FOLIOS Y CERTIFICACIONES
+   Responsable: Arash - Issue #1 */
 
 CREATE TABLE control_folio (
     id_control          INT IDENTITY(1,1) PRIMARY KEY,
@@ -275,8 +260,7 @@ CREATE TABLE certificacion_emitida (
 GO
 
 
-/* ============================================================
-   7. TRIGGERS
+/* 7. TRIGGERS
    Nota general de migracion PostgreSQL -> T-SQL:
    - PostgreSQL usa una FUNCTION + un TRIGGER que la llama, con
      las pseudo-filas NEW y OLD, y se dispara FOR EACH ROW.
@@ -289,14 +273,11 @@ GO
      traduce a SESSION_CONTEXT en T-SQL. La aplicacion Java debe
      ejecutar, al inicio de cada conexion/transaccion:
        EXEC sp_set_session_context @key=N'usuario_id', @value=?;
-       EXEC sp_set_session_context @key=N'razon_cambio', @value=?;
-   ============================================================ */
+       EXEC sp_set_session_context @key=N'razon_cambio', @value=?; */
 
-/* ------------------------------------------------------------
-   7.1 Trigger generico de auditoria  (Frank - Issue #0)
+/* 7.1 Trigger generico de auditoria  (Frank - Issue #0)
    Registra INSERT / UPDATE / DELETE sobre asambleista y
-   nombramiento en sys_log_auditoria.
-   ------------------------------------------------------------ */
+   nombramiento en sys_log_auditoria. */
 GO
 CREATE TRIGGER tg_auditoria_asambleista
 ON asambleista
@@ -371,16 +352,14 @@ END;
 GO
 
 
-/* ------------------------------------------------------------
-   7.2 Trigger de traslape de nombramientos  (Frank - Issue #9)
+/* 7.2 Trigger de traslape de nombramientos  (Frank - Issue #9)
    Impide registrar dos nombramientos del mismo asambleista cuyo
    rango de fechas se traslape. Se dispara en INSERT y UPDATE.
 
    Migracion: el trigger original era BEFORE ... FOR EACH ROW.
    En T-SQL no existe BEFORE; se usa un trigger AFTER que valida
    el conjunto recien insertado contra el resto y hace ROLLBACK
-   si detecta traslape.
-   ------------------------------------------------------------ */
+   si detecta traslape. */
 GO
 CREATE TRIGGER tg_traslape_sector
 ON nombramiento
@@ -396,8 +375,8 @@ BEGIN
           ON n.id_asambleista = i.id_asambleista
          AND n.id_nombramiento <> i.id_nombramiento
         WHERE
-            -- dos rangos se traslapan si cada uno empieza antes
-            -- de que el otro termine (NULL = vigente = fecha maxima)
+            --dos rangos se traslapan si cada uno empieza antes
+            --de que el otro termine (NULL = vigente = fecha maxima)
             i.fecha_inicio <= ISNULL(n.fecha_fin, '9999-12-31')
             AND n.fecha_inicio <= ISNULL(i.fecha_fin, '9999-12-31')
     )
@@ -409,8 +388,7 @@ END;
 GO
 
 
-/* ------------------------------------------------------------
-   7.3 Trigger de versionamiento normativo  (Josue - Issue #10)
+/* 7.3 Trigger de versionamiento normativo  (Josue - Issue #10)
    Al insertar un elemento marcado como 'Vigente', marca como
    'Historico' la version anterior con la misma etiqueta y mismo
    padre dentro del mismo reglamento, y le pone fecha_fin_vigencia.
@@ -425,8 +403,7 @@ GO
    versionamiento funcione es archivar la version vieja ANTES de
    insertar la nueva. Eso exige INSTEAD OF INSERT: el trigger
    toma el control, primero marca como Historico lo anterior, y
-   recien entonces hace el INSERT real de las filas nuevas.
-   ------------------------------------------------------------ */
+   recien entonces hace el INSERT real de las filas nuevas. */
 GO
 CREATE TRIGGER tg_vigencia_normativa
 ON elemento_normativo
@@ -438,8 +415,8 @@ BEGIN
     DECLARE @estado_vigente   INT = (SELECT id_estado_vigencia FROM catalogo_estado_vigencia WHERE nombre = 'Vigente');
     DECLARE @estado_historico INT = (SELECT id_estado_vigencia FROM catalogo_estado_vigencia WHERE nombre = 'Historico');
 
-    -- Paso 1: archivar las versiones vigentes anteriores que seran
-    -- reemplazadas por una fila nueva tambien marcada como Vigente.
+    --Paso 1: archivar las versiones vigentes anteriores que seran
+    --reemplazadas por una fila nueva tambien marcada como Vigente.
     UPDATE en
     SET en.id_estado_vigencia = @estado_historico,
         en.fecha_fin_vigencia = CAST(SYSUTCDATETIME() AS DATE)
@@ -451,8 +428,8 @@ BEGIN
     WHERE en.id_estado_vigencia = @estado_vigente
       AND i.id_estado_vigencia  = @estado_vigente;
 
-    -- Paso 2: insertar realmente las filas nuevas. Para entonces
-    -- el indice uq_etiqueta_vigente ya no encuentra conflicto.
+    --Paso 2: insertar realmente las filas nuevas. Para entonces
+    --el indice uq_etiqueta_vigente ya no encuentra conflicto.
     INSERT INTO elemento_normativo
         (id_reglamento, id_elemento_padre, id_nivel_reglamento,
          numero_etiqueta, contenido_texto, orden,
@@ -468,8 +445,7 @@ END;
 GO
 
 
-/* ------------------------------------------------------------
-   7.4 Trigger atomico de foliado  (Arash - Issue #1)
+/* 7.4 Trigger atomico de foliado  (Arash - Issue #1)
    Cuando se inserta una certificacion sin folio, genera el
    siguiente consecutivo del anio con formato DAIR-001-2026.
 
@@ -483,8 +459,7 @@ GO
      Recorre las certificaciones sin folio una por una con un
      cursor para asignar consecutivos correlativos. Para los
      volumenes de este proyecto el costo es despreciable y la
-     correccion es prioritaria.
-   ------------------------------------------------------------ */
+     correccion es prioritaria.*/
 GO
 CREATE TRIGGER tg_folio_secuencial
 ON certificacion_emitida
@@ -514,7 +489,7 @@ BEGIN
     BEGIN
         IF @folio IS NULL
         BEGIN
-            -- Bloqueo de la fila de control para serializar concurrencia
+            --Bloqueo de la fila de control para serializar concurrencia
             SELECT @siguiente = ultimo_numero + 1
             FROM control_folio WITH (UPDLOCK, HOLDLOCK)
             WHERE anio = @anio AND prefijo = @prefijo;
@@ -543,16 +518,14 @@ END;
 GO
 
 
-/* ------------------------------------------------------------
-   7.5 Trigger de cambio de identidad  (Arash - Issue #14)
+/* 7.5 Trigger de cambio de identidad  (Arash - Issue #14)
    Cualquier UPDATE que cambie cedula o nombre en asambleista
    genera automaticamente un registro en bitacora_asambleistas
    con los valores anteriores.
 
    Migracion: el original comparaba OLD vs NEW fila por fila.
    En T-SQL se hace JOIN entre DELETED (valores previos) e
-   INSERTED (valores nuevos) por id_asambleista.
-   ------------------------------------------------------------ */
+   INSERTED (valores nuevos) por id_asambleista. */
 GO
 CREATE TRIGGER tg_cambio_identidad
 ON asambleista
@@ -580,11 +553,9 @@ END;
 GO
 
 
-/* ============================================================
-   8. DATOS SEMILLA
-   ============================================================ */
+--8. DATOS SEMILLA
 
-/* ---- 8.1 Seguridad: roles y permisos (Frank - Issue #0) ---- */
+--8.1 Seguridad: roles y permisos (Frank - Issue #0) 
 INSERT INTO sys_rol (nombre_rol) VALUES
     ('Administrador'), ('Secretaria AIR'), ('Consulta');
 GO
@@ -628,7 +599,7 @@ GO
    generado con BCrypt (coste 10). Cambiarlo de inmediato. */
 INSERT INTO sys_usuario (username, password_hash, email, activo) VALUES
     ('admin',
-     '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
+     '$2a$12$Dml3HUlko1YRJBX5u1hzp.c.IoHYbsoDK9f3q5Pu7bKsggek8N7lu',
      'admin@itcr.ac.cr',
      1);
 GO
@@ -640,7 +611,7 @@ WHERE u.username = 'admin' AND r.nombre_rol = 'Administrador';
 GO
 
 
-/* ---- 8.2 Catalogo Maestro (Arash - Issue #1) ---- */
+--8.2 Catalogo Maestro (Arash - Issue #1) 
 INSERT INTO catalogo_maestro (grupo_catalogo, nombre) VALUES
     ('SECTOR', 'Docente'),
     ('SECTOR', 'Estudiantil'),
@@ -692,7 +663,7 @@ INSERT INTO catalogo_maestro (grupo_catalogo, nombre) VALUES
 GO
 
 
-/* ---- 8.3 Catalogos de normativa (Josue - Issue #10) ----
+/* 8.3 Catalogos de normativa (Josue - Issue #10) 
    El ORDEN de estos INSERT es critico: el filtered index
    uq_etiqueta_vigente depende de que 'Vigente' tenga id = 1.
    Por eso 'Vigente' se inserta primero. */
@@ -706,9 +677,8 @@ INSERT INTO catalogo_nivel_reglamento (nombre, orden) VALUES
 GO
 
 
-/* ---- 8.4 Datos semilla del Estatuto Organico (Josue - Issue #10)
+/* 8.4 Datos semilla del Estatuto Organico (Josue - Issue #10)
    Arbol de ejemplo.
-
    IMPORTANTE: la tabla elemento_normativo tiene un trigger
    INSTEAD OF INSERT, por lo que SCOPE_IDENTITY() NO funciona aqui
    (devolveria NULL: el INSERT real ocurre dentro del trigger, en
@@ -723,14 +693,14 @@ INSERT INTO reglamento (nombre_normativa, sigla, emisor) VALUES
 
 DECLARE @id_reg INT = (SELECT id_reglamento FROM reglamento WHERE sigla = 'EOITCR');
 
--- ids de niveles y estado
+--ids de niveles y estado
 DECLARE @niv_titulo   INT = (SELECT id_nivel_reglamento FROM catalogo_nivel_reglamento WHERE nombre = 'Titulo');
 DECLARE @niv_capitulo INT = (SELECT id_nivel_reglamento FROM catalogo_nivel_reglamento WHERE nombre = 'Capitulo');
 DECLARE @niv_articulo INT = (SELECT id_nivel_reglamento FROM catalogo_nivel_reglamento WHERE nombre = 'Articulo');
 DECLARE @niv_inciso   INT = (SELECT id_nivel_reglamento FROM catalogo_nivel_reglamento WHERE nombre = 'Inciso');
 DECLARE @est_vigente  INT = (SELECT id_estado_vigencia  FROM catalogo_estado_vigencia  WHERE nombre = 'Vigente');
 
--- Titulo II (raiz, sin padre)
+--Titulo II (raiz, sin padre)
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
@@ -739,7 +709,7 @@ DECLARE @id_titulo2 INT = (
     SELECT id_elemento FROM elemento_normativo
     WHERE id_reglamento = @id_reg AND id_elemento_padre IS NULL AND numero_etiqueta = 'II');
 
--- Capitulo I dentro del Titulo II
+--Capitulo I dentro del Titulo II
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
@@ -748,7 +718,7 @@ DECLARE @id_cap1 INT = (
     SELECT id_elemento FROM elemento_normativo
     WHERE id_reglamento = @id_reg AND id_elemento_padre = @id_titulo2 AND numero_etiqueta = 'I');
 
--- Articulo 18 dentro del Capitulo I
+--Articulo 18 dentro del Capitulo I
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
@@ -759,7 +729,7 @@ DECLARE @id_art18 INT = (
     SELECT id_elemento FROM elemento_normativo
     WHERE id_reglamento = @id_reg AND id_elemento_padre = @id_cap1 AND numero_etiqueta = '18');
 
--- Incisos del Articulo 18
+--Incisos del Articulo 18
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
@@ -767,7 +737,7 @@ VALUES
     (@id_reg, @id_art18, @niv_inciso, 'b)', 'Conocer y resolver sobre los recursos de su competencia.', 2, @est_vigente),
     (@id_reg, @id_art18, @niv_inciso, 'c)', 'Las demas que le asigne el Estatuto Organico.', 3, @est_vigente);
 
--- Articulo 19 dentro del Capitulo I
+--Articulo 19 dentro del Capitulo I
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
@@ -775,7 +745,7 @@ VALUES
      'La Asamblea Institucional Representativa estara constituida segun lo defina el reglamento.',
      2, @est_vigente);
 
--- Titulo III (segundo titulo raiz, para cumplir el minimo del plan)
+--Titulo III (segundo titulo raiz, para cumplir el minimo del plan)
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
@@ -784,7 +754,7 @@ DECLARE @id_titulo3 INT = (
     SELECT id_elemento FROM elemento_normativo
     WHERE id_reglamento = @id_reg AND id_elemento_padre IS NULL AND numero_etiqueta = 'III');
 
--- Capitulo I dentro del Titulo III
+--Capitulo I dentro del Titulo III
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
@@ -793,7 +763,7 @@ DECLARE @id_cap3_1 INT = (
     SELECT id_elemento FROM elemento_normativo
     WHERE id_reglamento = @id_reg AND id_elemento_padre = @id_titulo3 AND numero_etiqueta = 'I');
 
--- Articulos dentro del Capitulo I del Titulo III
+--Articulos dentro del Capitulo I del Titulo III
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
@@ -804,7 +774,7 @@ VALUES
 GO
 
 
-/* ---- 8.5 Asambleistas de ejemplo (Frank - Issue #9) ----
+/* 8.5 Asambleistas de ejemplo (Frank - Issue #9) 
    Cinco asambleistas con nombramientos diversos para la
    validacion final del Dia 10. Se capturan los ids con
    SCOPE_IDENTITY para enlazar los nombramientos. */
@@ -836,7 +806,7 @@ INSERT INTO asambleista (cedula, nombre, correo_institucional) VALUES
     ('5-5555-5555', 'Laura Mendez Quesada',     'lmendez@itcr.ac.cr');
 DECLARE @id_a5 INT = SCOPE_IDENTITY();
 
--- Nombramientos (sin traslapes entre si para un mismo asambleista)
+--Nombramientos (sin traslapes entre si para un mismo asambleista)
 INSERT INTO nombramiento (id_asambleista, id_sector, id_puesto, fecha_inicio, fecha_fin, estado, id_usuario_registro) VALUES
     (@id_a1, @sector_docente, @puesto_asamb, '2022-01-01', '2023-12-31', 'Inactivo', @id_admin_user),
     (@id_a1, @sector_docente, @puesto_pres,  '2024-01-01', NULL,         'Vigente',  @id_admin_user),
@@ -846,9 +816,6 @@ INSERT INTO nombramiento (id_asambleista, id_sector, id_puesto, fecha_inicio, fe
     (@id_a5, @sector_docente, @puesto_asamb, '2024-01-15', NULL,         'Vigente',  @id_admin_user);
 GO
 
-
-/* ============================================================
-   FIN DEL SCRIPT proyecto-air.sql
-   ============================================================ */
+--FIN DEL SCRIPT proyecto-air.sql 
 PRINT 'proyecto-air.sql ejecutado correctamente.';
 GO
