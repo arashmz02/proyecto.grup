@@ -36,9 +36,7 @@ import java.util.List;
 @WebServlet(name = "AuthController", urlPatterns = {"/auth/login", "/auth/logout"})
 public class AuthController extends HttpServlet {
 
-    /* ============================================================
-       GET: mostrar formulario de login o procesar logout
-       ============================================================ */
+    /* GET: mostrar formulario de login o procesar logout*/
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
@@ -53,9 +51,7 @@ public class AuthController extends HttpServlet {
         }
     }
 
-    /* ============================================================
-       POST: procesar el formulario de login
-       ============================================================ */
+    /* POST: procesar el formulario de login */
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
@@ -68,11 +64,9 @@ public class AuthController extends HttpServlet {
     }
 
 
-    /* ============================================================
-       LOGIN
+    /* LOGIN
        Recibe username y password, valida contra la BD y, si son
-       correctos, crea la sesion con los datos del usuario.
-       ============================================================ */
+       correctos, crea la sesion con los datos del usuario. */
     private void login(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
 
@@ -134,11 +128,9 @@ public class AuthController extends HttpServlet {
     }
 
 
-    /* ============================================================
-       LOGOUT
+    /* LOGOUT
        Destruye la sesion por completo. Tras esto, cualquier
-       intento de acceso vuelve a requerir login.
-       ============================================================ */
+       intento de acceso vuelve a requerir login. */
     private void logout(HttpServletRequest req, HttpServletResponse resp)
             throws IOException {
 
@@ -150,15 +142,13 @@ public class AuthController extends HttpServlet {
     }
 
 
-    /* ============================================================
-       MIDDLEWARE: AUTENTICACION
+    /* MIDDLEWARE: AUTENTICACION
        Verifica que exista una sesion activa con un usuario.
        Devuelve true si puede continuar; si no, redirige al login
        y devuelve false.
 
        Uso desde otro servlet:
-         if (!AuthController.middlewareAuth(req, resp)) return;
-       ============================================================ */
+         if (!AuthController.middlewareAuth(req, resp)) return; */
     public static boolean middlewareAuth(HttpServletRequest req,
                                          HttpServletResponse resp)
             throws IOException {
@@ -176,15 +166,13 @@ public class AuthController extends HttpServlet {
     }
 
 
-    /* ============================================================
-       MIDDLEWARE: PERMISO
+    /* MIDDLEWARE: PERMISO
        Verifica que el usuario autenticado tenga un permiso
        especifico. Asume que middlewareAuth ya se llamo antes.
 
        Uso desde otro servlet:
          if (!AuthController.middlewarePermiso(req, resp,
-                 "REGISTRAR_ASAMBLEISTAS")) return;
-       ============================================================ */
+                 "REGISTRAR_ASAMBLEISTAS")) return; */
     @SuppressWarnings("unchecked")
     public static boolean middlewarePermiso(HttpServletRequest req,
                                             HttpServletResponse resp,
@@ -211,10 +199,8 @@ public class AuthController extends HttpServlet {
     }
 
 
-    /* ------------------------------------------------------------
-       Utilidad interna: reenvia al formulario de login con un
-       mensaje de error para mostrar al usuario.
-       ------------------------------------------------------------ */
+    /*  Utilidad interna: reenvia al formulario de login con un
+       mensaje de error para mostrar al usuario. */
     private void reenviarConError(HttpServletRequest req,
                                   HttpServletResponse resp,
                                   String mensaje)
