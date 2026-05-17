@@ -294,12 +294,11 @@ public class Asambleista {
     }
 
 
-    /* ============================================================
-       DTO para vistas: nombramientos con datos resueltos.
+    /*  DTO para vistas: nombramientos con datos resueltos.
        Se mantiene como clase interna publica para no contaminar
        el paquete models con tipos pequenos. La vista accede a
        los campos directamente.
-       ============================================================ */
+        */
     public static class NombramientoVista {
         public int idNombramiento;
         public LocalDate fechaInicio;
