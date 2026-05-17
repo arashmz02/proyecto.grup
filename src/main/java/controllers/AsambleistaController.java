@@ -54,9 +54,7 @@ public class AsambleistaController extends HttpServlet {
         Pattern.compile("^[A-Za-z0-9._%+-]+@(itcr\\.ac\\.cr|estudiantec\\.cr)$");
 
 
-    /* ============================================================
-       GET: enrutado por ruta solicitada
-       ============================================================ */
+    /*  GET: enrutado por ruta solicitada */
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
@@ -82,9 +80,7 @@ public class AsambleistaController extends HttpServlet {
     }
 
 
-    /* ============================================================
-       POST: solo /asambleistas/nuevo (alta)
-       ============================================================ */
+    /* POST: solo /asambleistas/nuevo (alta) */
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
@@ -99,9 +95,7 @@ public class AsambleistaController extends HttpServlet {
     }
 
 
-    /* ============================================================
-       ACCION: listar asambleistas
-       ============================================================ */
+    /* ACCION: listar asambleistas */
     private void listar(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
 
@@ -131,10 +125,8 @@ public class AsambleistaController extends HttpServlet {
     }
 
 
-    /* ============================================================
-       ACCION: mostrar formulario de alta
-       Requiere permiso REGISTRAR_ASAMBLEISTAS.
-       ============================================================ */
+    /* ACCION: mostrar formulario de alta
+       Requiere permiso REGISTRAR_ASAMBLEISTAS.  */
     private void mostrarFormulario(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
 
@@ -160,9 +152,7 @@ public class AsambleistaController extends HttpServlet {
     }
 
 
-    /* ============================================================
-       ACCION: procesar alta del formulario
-       ============================================================ */
+    /* ACCION: procesar alta del formulario */
     private void procesarAlta(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
 
@@ -218,8 +208,8 @@ public class AsambleistaController extends HttpServlet {
             Asambleista.agregarNombramiento(
                 idAsambleista, idSector, idPuesto, fechaInicio, fechaFin, idUsuario);
 
-            // Redirigir a la lista. El parametro 'creado' permite a
-            // la vista mostrar un toast de exito.
+            //Redirigir a la lista. El parametro 'creado' permite a
+            //la vista mostrar un toast de exito.
             resp.sendRedirect(req.getContextPath() + "/asambleistas?creado=1");
 
         } catch (DateTimeParseException e) {
@@ -231,8 +221,8 @@ public class AsambleistaController extends HttpServlet {
                 "Los identificadores de sector y puesto deben ser numericos.");
 
         } catch (SQLException e) {
-            // El trigger tg_traslape_sector lanza error 50001 si hay
-            // traslape de fechas. Lo mostramos como mensaje amigable.
+            //El trigger tg_traslape_sector lanza error 50001 si hay
+            //traslape de fechas. Lo mostramos como mensaje amigable.
             if (e.getErrorCode() == 50001 ||
                 (e.getMessage() != null && e.getMessage().contains("Traslape"))) {
                 volverAlFormularioConError(req, resp,
@@ -246,9 +236,7 @@ public class AsambleistaController extends HttpServlet {
     }
 
 
-    /* ============================================================
-       ACCION: detalle (historial de nombramientos)
-       ============================================================ */
+    /*  ACCION: detalle (historial de nombramientos) */
     private void mostrarDetalle(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
 
@@ -287,9 +275,7 @@ public class AsambleistaController extends HttpServlet {
     }
 
 
-    /* ============================================================
-       HELPERS
-       ============================================================ */
+    /*  HELPERS */
 
     /**
      * Valida los campos del formulario. Devuelve null si todo OK,
@@ -387,9 +373,7 @@ public class AsambleistaController extends HttpServlet {
     }
 
 
-    /* ============================================================
-       DTOs internos (publicos para que las JSP los accedan)
-       ============================================================ */
+    /* DTOs internos (publicos para que las JSP los accedan) */
     public static class FilaAsambleista {
         public Asambleista asambleista;
         public boolean vigente;
