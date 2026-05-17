@@ -6,53 +6,41 @@ import java.sql.SQLException;
 
 /**
  * ConexionBD.java
- * Maneja la conexión a Azure SQL Server
- * 
- -- IMPORTANTE: Reemplaza los valores con tus credenciales de Azure
+ * Maneja la conexion a Azure SQL Server.
+ * Lee credenciales desde variables de entorno (Issue #0).
  */
 public class ConexionBD {
-    
-    // REEMPLAZA ESTO CON TUS DATOS DE AZURE
-    private static final String SERVIDOR = "tu-servidor.database.windows.net";
-    private static final String PUERTO = "1433";
-    private static final String BD = "proyecto_air";
-    private static final String USUARIO = "admin_user";
-    private static final String CONTRASENA = "TuContrasena123!";
-    
-    // URL de conexión JDBC para SQL Server
-    private static final String URL = 
-        "jdbc:sqlserver://" + SERVIDOR + ":" + PUERTO + 
-        ";database=" + BD + 
-        ";encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=30";
-    
-    /**
-     * Obtiene una conexión a la BD
-     */
+
+    private static final String SERVIDOR = getEnv("DB_SERVER");
+    private static final String BD       = getEnv("DB_NAME");
+    private static final String USUARIO  = getEnv("DB_USER");
+    private static final String CONTRASENA = getEnv("DB_PASSWORD");
+
+    private static final String URL =
+        "jdbc:sqlserver://" + SERVIDOR + ":1433" +
+        ";database=" + BD +
+        ";encrypt=true;trustServerCertificate=false;loginTimeout=60";
+
+    private static String getEnv(String nombre) {
+        String v = System.getenv(nombre);
+        if (v == null || v.isBlank()) {
+            throw new RuntimeException("Falta la variable de entorno " + nombre);
+        }
+        return v;
+    }
+
     public static Connection obtenerConexion() throws SQLException {
         try {
             Class.forName("com.microsoft.sqlserver.jdbc.SQLServerDriver");
-            Connection conexion = DriverManager.getConnection(URL, USUARIO, CONTRASENA);
-            System.out.println("[INFO] Conexión a Azure SQL exitosa");
-            return conexion;
+            return DriverManager.getConnection(URL, USUARIO, CONTRASENA);
         } catch (ClassNotFoundException e) {
-            System.err.println("[ERROR] Driver JDBC no encontrado");
             throw new SQLException("Driver no disponible", e);
-        } catch (SQLException e) {
-            System.err.println("[ERROR] No se pudo conectar: " + e.getMessage());
-            throw e;
         }
     }
-    
-    /**
-     * Cierra una conexión
-     */
+
     public static void cerrarConexion(Connection conexion) {
         if (conexion != null) {
-            try {
-                conexion.close();
-            } catch (SQLException e) {
-                System.err.println("[ERROR] Error al cerrar: " + e.getMessage());
-            }
+            try { conexion.close(); } catch (SQLException e) { /* ignore */ }
         }
     }
 }

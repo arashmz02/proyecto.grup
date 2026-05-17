@@ -13,15 +13,9 @@ import java.util.List;
 
 /**
  * Servlet de la pantalla de inicio (post-login).
- *
- * Responsabilidades:
- *  1. Dar un destino al que redirigir tras un login exitoso.
- *  2. Demostrar que el middlewareAuth protege rutas internas:
- *     si se entra a /inicio sin sesion, redirige al login.
- *  3. Mostrar al usuario las acciones disponibles segun los
- *     permisos que tenga asignados (defensa en profundidad: el
- *     enlace solo aparece si la sesion tiene el permiso, y
- *     ademas cada controlador valida el permiso en su middleware).
+ * Muestra al usuario sus roles, permisos y los modulos a los que
+ * tiene acceso. Cada tarjeta aparece solo si el usuario tiene el
+ * permiso correspondiente (defensa en profundidad).
  */
 @WebServlet(name = "InicioController", urlPatterns = {"/inicio"})
 public class InicioController extends HttpServlet {
@@ -31,8 +25,6 @@ public class InicioController extends HttpServlet {
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
 
-        // PROTECCION DE RUTA INTERNA (criterio de aceptacion del Issue #0).
-        // Si no hay sesion activa, middlewareAuth redirige al login.
         if (!AuthController.middlewareAuth(req, resp)) {
             return;
         }
@@ -42,12 +34,13 @@ public class InicioController extends HttpServlet {
         List<String> roles    = (List<String>) sesion.getAttribute("roles");
         List<String> permisos = (List<String>) sesion.getAttribute("permisos");
 
-        // Calcular que modulos puede ver
         boolean puedeVerAsambleistas =
             permisos != null && (permisos.contains("REGISTRAR_ASAMBLEISTAS")
                               || permisos.contains("CONSULTAR_NORMATIVA"));
-        // (Cuando existan modulos de Josue y Arash, se agregan aqui:
-        //  puedeVerNormativa, puedeVerCertificaciones, puedeGestionarUsuarios, etc.)
+        boolean puedeVerNormativa =
+            permisos != null && permisos.contains("CONSULTAR_NORMATIVA");
+        boolean puedeVerFolios =
+            permisos != null && permisos.contains("EMITIR_CERTIFICACION");
 
         String ctx = req.getContextPath();
 
@@ -69,7 +62,7 @@ public class InicioController extends HttpServlet {
         out.println("text-decoration:none;border-radius:4px;font-size:0.85rem;}");
         out.println("h2{margin-bottom:0.75rem;color:#1f2d3d;font-size:1.2rem;}");
         out.println("ul{color:#34495e;margin-left:1.5rem;margin-top:0.5rem;}");
-        out.println(".modulos{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));");
+        out.println(".modulos{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));");
         out.println("gap:1rem;margin-top:1rem;}");
         out.println(".modulo{display:block;padding:1.1rem 1.25rem;background:#2980b9;");
         out.println("color:#fff;text-decoration:none;border-radius:6px;transition:background 0.15s;}");
@@ -79,7 +72,6 @@ public class InicioController extends HttpServlet {
         out.println(".vacio{color:#7f8c8d;font-style:italic;font-size:0.9rem;}");
         out.println("</style></head><body>");
 
-        // --- Barra superior ---
         out.println("<div class='barra'>");
         out.println("<span>Sistema de Gestion Legislativa AIR</span>");
         out.println("<a class='salir' href='" + ctx + "/auth/logout'>Cerrar sesion</a>");
@@ -87,7 +79,7 @@ public class InicioController extends HttpServlet {
 
         out.println("<div class='contenido'>");
 
-        // --- Tarjeta de identidad ---
+        // Tarjeta de identidad
         out.println("<div class='tarjeta'>");
         out.println("<h2>Bienvenido, " + escapar(username) + "</h2>");
 
@@ -104,31 +96,42 @@ public class InicioController extends HttpServlet {
         out.println("</ul>");
         out.println("</div>");
 
-        // --- Tarjeta de modulos disponibles ---
+        // Tarjeta de modulos disponibles
         out.println("<div class='tarjeta'>");
         out.println("<h2>Acciones disponibles</h2>");
 
-        boolean hayAlgo = puedeVerAsambleistas;
+        boolean hayAlgo = puedeVerAsambleistas || puedeVerNormativa || puedeVerFolios;
 
         if (!hayAlgo) {
             out.println("<p class='vacio'>");
-            out.println("Tu rol actual no tiene modulos asociados a\u00fan.");
+            out.println("Tu rol actual no tiene modulos asociados.");
             out.println("</p>");
         } else {
             out.println("<div class='modulos'>");
 
             if (puedeVerAsambleistas) {
                 out.println("<a class='modulo' href='" + ctx + "/asambleistas'>");
-                out.println("<div class='titulo'>Padron de asambleistas</div>");
+                out.println("<div class='titulo'>Padron de Asambleistas</div>");
                 out.println("<div class='descripcion'>");
                 out.println("Consultar y gestionar el registro de asambleistas y sus nombramientos.");
                 out.println("</div></a>");
             }
 
-            // Aqui se agregan los modulos de Josue y Arash cuando esten listos:
-            //   if (puedeVerNormativa)        ... /reglamentos
-            //   if (puedeVerCertificaciones)  ... /certificaciones
-            //   if (puedeGestionarUsuarios)   ... /usuarios
+            if (puedeVerNormativa) {
+                out.println("<a class='modulo' href='" + ctx + "/views/normativa/arbol.jsp'>");
+                out.println("<div class='titulo'>Normativa Institucional</div>");
+                out.println("<div class='descripcion'>");
+                out.println("Explorar el arbol jerarquico del Estatuto Organico y sus reformas.");
+                out.println("</div></a>");
+            }
+
+            if (puedeVerFolios) {
+                out.println("<a class='modulo' href='" + ctx + "/folios'>");
+                out.println("<div class='titulo'>Generacion de Folios</div>");
+                out.println("<div class='descripcion'>");
+                out.println("Emitir folios unicos para certificaciones con numeracion atomica.");
+                out.println("</div></a>");
+            }
 
             out.println("</div>");
         }
@@ -139,10 +142,6 @@ public class InicioController extends HttpServlet {
     }
 
 
-    /**
-     * Escapa caracteres HTML basicos para evitar XSS si el
-     * username o rol contuviera caracteres especiales.
-     */
     private static String escapar(String s) {
         if (s == null) return "";
         return s.replace("&",  "&amp;")

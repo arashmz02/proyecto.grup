@@ -7,16 +7,16 @@ import com.itcr.air.util.ConexionBD;
 
 /**
  * NormativaDAO.java
- * Data Access Object para la jerarquía normativa
+ * Data Access Object para la jerarquÃ­a normativa
  * Contiene TODAS las queries SQL con JDBC puro
  */
 public class NormativaDAO {
     
     /**
-     * Obtiene el árbol COMPLETO de un reglamento (CTE recursiva)
+     * Obtiene el Ã¡rbol COMPLETO de un reglamento (CTE recursiva)
      */
     public static JsonArray obtenerArbolReglamento(int idReglamento) throws SQLException {
-        String sql = "WITH RECURSIVE arbol AS (" +
+        String sql = "WITH arbol AS (" +
             "  SELECT " +
             "    e.id_elemento, e.id_elemento_padre, e.numero_etiqueta, " +
             "    e.contenido_texto, e.orden, n.nombre AS nivel, " +
@@ -90,7 +90,7 @@ public class NormativaDAO {
     }
     
     /**
-     * Obtiene qué versión estaba vigente en una fecha específica
+     * Obtiene quÃ© versiÃ³n estaba vigente en una fecha especÃ­fica
      */
     public static JsonObject obtenerArticuloEnFecha(int idElemento, String fecha) throws SQLException {
         String sql = "SELECT * FROM elemento_normativo " +
@@ -119,8 +119,8 @@ public class NormativaDAO {
     }
     
     /**
-     * CREA un nuevo elemento (reforma, artículo, etc.)
-     * El TRIGGER tg_vigencia_normativa se encarga de marcar versiones anteriores como Histórico
+     * CREA un nuevo elemento (reforma, artÃ­culo, etc.)
+     * El TRIGGER tg_vigencia_normativa se encarga de marcar versiones anteriores como HistÃ³rico
      */
     public static JsonObject crearElemento(int idReglamento, Integer idElementoPadre, 
                                           int idNivel, String numeroEtiqueta, 
@@ -148,7 +148,7 @@ public class NormativaDAO {
             int filasAfectadas = stmt.executeUpdate();
             
             if (filasAfectadas > 0) {
-                // El trigger ya insertó el elemento, recupera el ID
+                // El trigger ya insertÃ³ el elemento, recupera el ID
                 String sqlSelect = "SELECT TOP 1 * FROM elemento_normativo " +
                     "WHERE id_reglamento = ? AND numero_etiqueta = ? ORDER BY id_elemento DESC";
                 
@@ -214,7 +214,7 @@ public class NormativaDAO {
     }
     
     /**
-     * Obtiene la información COMPLETA de un elemento específico
+     * Obtiene la informaciÃ³n COMPLETA de un elemento especÃ­fico
      */
     public static JsonObject obtenerElemento(int idElemento) throws SQLException {
         String sql = "SELECT e.*, r.nombre_normativa, r.sigla, n.nombre AS nivel_nombre, " +

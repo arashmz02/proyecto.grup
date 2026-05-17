@@ -1,3 +1,11 @@
-C:\Users\jgpoc\OneDrive\Documentos\Tec\1semestre 2 año\Bases de datos\Proyecto 2\proyecto.grup\src\main\java\com\itcr\air\util\ConexionBD.java
-C:\Users\jgpoc\OneDrive\Documentos\Tec\1semestre 2 año\Bases de datos\Proyecto 2\proyecto.grup\src\main\java\com\itcr\air\servlets\NormativaServlet.java
-C:\Users\jgpoc\OneDrive\Documentos\Tec\1semestre 2 año\Bases de datos\Proyecto 2\proyecto.grup\src\main\java\com\itcr\air\dao\NormativaDAO.java
+C:\Users\frank\OneDrive\Documentos\GitHub\proyecto.grup\src\main\java\com\itcr\air\dao\NormativaDAO.java
+C:\Users\frank\OneDrive\Documentos\GitHub\proyecto.grup\src\main\java\com\itcr\air\servlets\NormativaServlet.java
+C:\Users\frank\OneDrive\Documentos\GitHub\proyecto.grup\src\main\java\com\itcr\air\util\ConexionBD.java
+C:\Users\frank\OneDrive\Documentos\GitHub\proyecto.grup\src\main\java\config\Conexion.java
+C:\Users\frank\OneDrive\Documentos\GitHub\proyecto.grup\src\main\java\controllers\AsambleistaController.java
+C:\Users\frank\OneDrive\Documentos\GitHub\proyecto.grup\src\main\java\controllers\AuthController.java
+C:\Users\frank\OneDrive\Documentos\GitHub\proyecto.grup\src\main\java\controllers\FolioServlet.java
+C:\Users\frank\OneDrive\Documentos\GitHub\proyecto.grup\src\main\java\controllers\InicioController.java
+C:\Users\frank\OneDrive\Documentos\GitHub\proyecto.grup\src\main\java\models\Asambleista.java
+C:\Users\frank\OneDrive\Documentos\GitHub\proyecto.grup\src\main\java\models\FolioDAO.java
+C:\Users\frank\OneDrive\Documentos\GitHub\proyecto.grup\src\main\java\models\Usuario.java

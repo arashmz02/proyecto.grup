@@ -1,0 +1,15 @@
+[33m96866d7[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdevelop[m[33m, [m[1;31morigin/develop[m[33m, [m[1;31morigin/HEAD[m[33m)[m Merge pull request #19 from arashmz02/feature/issue-9-asambleistas
+[33m9413686[m[33m ([m[1;31morigin/feature/issue-9-asambleistas[m[33m, [m[1;32mfeature/issue-9-asambleistas[m[33m)[m Cambios en el T-SQL
+[33mb1693a4[m Arreglo de tablas generales
+[33m0f4241d[m Merge pull request #11 Issue 10
+[33md65a767[m Merge branch 'develop' into feature/issue-10-jerarquia-normativa
+[33m5ca4fd8[m Merge pull request #15 from arashmz02/feature/issue-9-asambleistas
+[33m4d62495[m Merge pull request #17 from arashmz02/feature/issue-1-mvc-folios
+[33m615bbf6[m Merge pull request #16 from arashmz02/develop
+[33m3ff26ec[m Merge pull request #12 from arashmz02/feature/issue-1-mvc-folios
+[33mbec03d8[m Merge branch 'feature/issue-10-jerarquia-normativa' of https://github.com/arashmz02/proyecto.grup into feature/issue-10-jerarquia-normativa
+[33mf1870aa[m refactor(normativa): migrar Issue #10 de JavaScript a Java con Servlets + JSP + JDBC puro
+[33m4d3199c[m Delete src/views/normativa/reglamento-arbol.html
+[33m242185d[m Delete src/views/normativa/elemento-registro.html
+[33me4e8b83[m Delete src/views/normativa/compilador-visor.html
+[33m90170cd[m Delete src/controllers/NormativaController.js

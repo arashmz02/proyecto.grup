@@ -1,15 +1,15 @@
 package com.itcr.air.servlets;
 
 import java.io.*;
-import javax.servlet.*;
-import javax.servlet.http.*;
-import javax.servlet.annotation.WebServlet;
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
+import jakarta.servlet.annotation.WebServlet;
 import com.google.gson.*;
 import com.itcr.air.dao.NormativaDAO;
 
 /**
  * NormativaServlet.java
- * Controlador para la jerarquía normativa
+ * Controlador para la jerarquÃ­a normativa
  * Maneja las solicitudes HTTP y llamadas al DAO
  */
 @WebServlet("/api/normativa/*")
@@ -19,8 +19,8 @@ public class NormativaServlet extends HttpServlet {
     private Gson gson = new Gson();
     
     /**
-     * GET: /api/normativa/arbol/1 → árbol del reglamento 1
-     * GET: /api/normativa/articulo/5 → detalle del elemento 5
+     * GET: /api/normativa/arbol/1 â†’ Ã¡rbol del reglamento 1
+     * GET: /api/normativa/articulo/5 â†’ detalle del elemento 5
      */
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) 
@@ -35,7 +35,7 @@ public class NormativaServlet extends HttpServlet {
             
             if (parts.length < 3) {
                 response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                out.println(gson.toJson(crearError("Ruta inválida")));
+                out.println(gson.toJson(crearError("Ruta invÃ¡lida")));
                 return;
             }
             
@@ -48,12 +48,12 @@ public class NormativaServlet extends HttpServlet {
                 verArticulo(id, response, out);
             } else {
                 response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-                out.println(gson.toJson(crearError("Acción no encontrada")));
+                out.println(gson.toJson(crearError("AcciÃ³n no encontrada")));
             }
             
         } catch (NumberFormatException e) {
             response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            out.println(gson.toJson(crearError("ID inválido")));
+            out.println(gson.toJson(crearError("ID invÃ¡lido")));
         } catch (Exception e) {
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             out.println(gson.toJson(crearError("Error: " + e.getMessage())));
@@ -62,7 +62,7 @@ public class NormativaServlet extends HttpServlet {
     }
     
     /**
-     * POST: /api/normativa/reforma → crear nuevo elemento
+     * POST: /api/normativa/reforma â†’ crear nuevo elemento
      */
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) 
@@ -83,7 +83,7 @@ public class NormativaServlet extends HttpServlet {
                 crearReforma(jsonData, response, out);
             } else {
                 response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-                out.println(gson.toJson(crearError("Acción no encontrada")));
+                out.println(gson.toJson(crearError("AcciÃ³n no encontrada")));
             }
             
         } catch (Exception e) {
@@ -94,7 +94,7 @@ public class NormativaServlet extends HttpServlet {
     }
     
     /**
-     * Ver árbol completo de un reglamento
+     * Ver Ã¡rbol completo de un reglamento
      */
     private void verArbol(int idReglamento, HttpServletResponse response, PrintWriter out) 
             throws Exception {
@@ -109,7 +109,7 @@ public class NormativaServlet extends HttpServlet {
     }
     
     /**
-     * Ver un artículo específico con su historial
+     * Ver un artÃ­culo especÃ­fico con su historial
      */
     private void verArticulo(int idElemento, HttpServletResponse response, PrintWriter out) 
             throws Exception {
@@ -138,7 +138,7 @@ public class NormativaServlet extends HttpServlet {
     private void crearReforma(JsonObject datos, HttpServletResponse response, PrintWriter out) 
             throws Exception {
         
-        //Validaciones básicas
+        //Validaciones bÃ¡sicas
         if (!datos.has("id_reglamento") || !datos.has("id_nivel_reglamento") || 
             !datos.has("numero_etiqueta") || !datos.has("contenido_texto")) {
             
@@ -155,7 +155,7 @@ public class NormativaServlet extends HttpServlet {
         Integer idElementoPadre = datos.has("id_elemento_padre") ? 
             datos.get("id_elemento_padre").getAsInt() : null;
         
-        //Validación de orden
+        //ValidaciÃ³n de orden
         if (orden < 1) {
             response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
             out.println(gson.toJson(crearError("Orden debe ser mayor a 0")));
@@ -169,7 +169,7 @@ public class NormativaServlet extends HttpServlet {
             response.setStatus(HttpServletResponse.SC_CREATED);
             JsonObject resultado = new JsonObject();
             resultado.addProperty("success", true);
-            resultado.addProperty("mensaje", "Elemento creado. Versión anterior marcada como histórica.");
+            resultado.addProperty("mensaje", "Elemento creado. VersiÃ³n anterior marcada como histÃ³rica.");
             resultado.add("elemento", elemento);
             
             out.println(gson.toJson(resultado));

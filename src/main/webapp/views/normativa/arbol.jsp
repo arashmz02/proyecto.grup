@@ -4,14 +4,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Árbol del Reglamento - AIR</title>
+    <title>Arbol del Reglamento - AIR</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px; }
-        .contenedor { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h1 { color: #333; margin-bottom: 30px; text-align: center; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: #ecf0f1; }
+
+        .barra {
+            background: #1f2d3d; color: #fff; padding: 1rem 2rem;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .barra a { color: #fff; text-decoration: none; font-size: 0.85rem; }
+        .salir { background: #c0392b; padding: 0.5rem 1rem; border-radius: 4px; }
+
+        .contenedor { max-width: 1000px; margin: 2rem auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #1f2d3d; margin-bottom: 30px; text-align: center; }
         #arbol-reglamento { margin-top: 20px; }
-        .elemento-arbol { margin-left: 20px; padding-left: 10px; margin-bottom: 5px; border-left: 3px solid #007bff; }
+        .elemento-arbol { margin-left: 20px; padding-left: 10px; margin-bottom: 5px; border-left: 3px solid #2980b9; }
         .elemento-arbol details { cursor: pointer; }
         .elemento-arbol summary { font-weight: bold; padding: 10px; background: #f9f9f9; border-radius: 4px; user-select: none; }
         .elemento-arbol summary:hover { background: #efefef; }
@@ -23,15 +31,27 @@
     </style>
 </head>
 <body>
+
+    <div class="barra">
+        <span>Sistema de Gestion Legislativa AIR &mdash; Normativa Institucional</span>
+        <div>
+            <a href="<%= request.getContextPath() %>/inicio">Inicio</a>
+            &nbsp;|&nbsp;
+            <a class="salir" href="<%= request.getContextPath() %>/auth/logout">
+                Cerrar sesion
+            </a>
+        </div>
+    </div>
+
     <div class="contenedor">
-        <h1>📋 Árbol de Reglamentos - AIR</h1>
-        <div id="arbol-reglamento" class="cargando">Cargando árbol...</div>
+        <h1>Arbol de Reglamentos - AIR</h1>
+        <div id="arbol-reglamento" class="cargando">Cargando arbol...</div>
     </div>
 
     <script>
         async function cargarArbol(idReglamento = 1) {
             try {
-                const response = await fetch(`/proyecto/api/normativa/arbol/${idReglamento}`);
+                const response = await fetch(`<%= request.getContextPath() %>/api/normativa/arbol/\${idReglamento}`);
                 const data = await response.json();
 
                 if (data.success) {
@@ -41,13 +61,14 @@
                 }
             } catch (error) {
                 console.error("Error:", error);
-                mostrarError("Error al cargar el árbol");
+                mostrarError("Error al cargar el arbol");
             }
         }
 
         function renderizarArbol(elementos) {
             const contenedor = document.getElementById('arbol-reglamento');
             contenedor.innerHTML = '';
+            contenedor.className = '';
 
             const elementosPorPadre = {};
             elementos.forEach(elem => {
@@ -62,29 +83,27 @@
                     <div class="elemento-arbol">
                         <details>
                             <summary>
-                                <strong>${elem.numero_etiqueta}</strong> — ${elem.nivel}
+                                <strong>\${elem.numero_etiqueta}</strong> - \${elem.nivel}
                                 <span class="badge badge-vigente">Vigente</span>
                             </summary>
                             <div class="elemento-contenido">
                                 <p><strong>Contenido:</strong></p>
-                                <p>${elem.contenido_texto}</p>
-                                ${renderizarHijos(elem.id_elemento)}
+                                <p>\${elem.contenido_texto}</p>
+                                \${renderizarHijos(elem.id_elemento)}
                             </div>
                         </details>
                     </div>
                 `).join('');
             }
-
             contenedor.innerHTML = renderizarHijos('raiz');
         }
 
         function mostrarError(mensaje) {
-            document.getElementById('arbol-reglamento').innerHTML = `<div class="error">❌ ${mensaje}</div>`;
+            document.getElementById('arbol-reglamento').innerHTML =
+                `<div class="error">Error: \${mensaje}</div>`;
         }
 
-        window.addEventListener('DOMContentLoaded', () => {
-            cargarArbol(1);
-        });
+        cargarArbol(1);
     </script>
 </body>
 </html>
