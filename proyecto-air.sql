@@ -557,7 +557,7 @@ GO
 
 --8.1 Seguridad: roles y permisos (Frank - Issue #0) 
 INSERT INTO sys_rol (nombre_rol) VALUES
-    ('Administrador'), ('Secretaria AIR'), ('Consulta');
+    ('Administrador'), ('Secretaria AIR'), ('Consulta'), ('Asambleista');
 GO
 
 INSERT INTO sys_permiso (nombre_permiso, descripcion) VALUES
@@ -588,6 +588,11 @@ SELECT r.id_rol, p.id_permiso
 FROM sys_rol r
 JOIN sys_permiso p ON p.nombre_permiso = 'CONSULTAR_NORMATIVA'
 WHERE r.nombre_rol = 'Consulta';
+INSERT INTO sys_rol_permiso (id_rol, id_permiso)
+SELECT r.id_rol, p.id_permiso
+FROM sys_rol r
+JOIN sys_permiso p ON p.nombre_permiso = 'CONSULTAR_NORMATIVA'
+WHERE r.nombre_rol = 'Asambleista';
 GO
 
 /* Usuario administrador inicial.
@@ -612,6 +617,42 @@ FROM sys_usuario u, sys_rol r
 WHERE u.username = 'admin' AND r.nombre_rol = 'Administrador';
 GO
 
+
+/* Usuarios adicionales para cada rol del sistema.
+   Contrasenas generadas con tools/GenerarHash.java (BCrypt factor 12).
+   secretaria  -> Secretaria2026
+   consulta    -> Consulta2026
+   asambleista -> Asambleista2026 */
+INSERT INTO sys_usuario (username, password_hash, email, activo) VALUES
+    ('secretaria',
+     '$2a$12$spaKNFen5SO6F9Bf2FZp8eTpGC6bMrAgzbyf3tIhpyfuoVgpLuZla',
+     'secretaria@itcr.ac.cr', 1);
+INSERT INTO sys_usuario (username, password_hash, email, activo) VALUES
+    ('consulta',
+     '$2a$12$0Z6P26oC9KM4UqdOdrccUe7BuXvfiSEvGg.GbhWroe7zlJqSawzrC',
+     'consulta@itcr.ac.cr', 1);
+GO
+
+INSERT INTO sys_usuario (username, password_hash, email, activo) VALUES
+    ('asambleista',
+     '$2a$12$gUY3AuY5Mdr0szeI7CsUFuAGdxBSPFUye.zUweEQO5zaep4inMnYK',
+     'asambleista@estudiantec.cr', 1);
+    
+INSERT INTO sys_usuario_rol (id_usuario, id_rol)
+SELECT u.id_usuario, r.id_rol
+FROM sys_usuario u, sys_rol r
+WHERE u.username = 'secretaria' AND r.nombre_rol = 'Secretaria AIR';
+
+INSERT INTO sys_usuario_rol (id_usuario, id_rol)
+SELECT u.id_usuario, r.id_rol
+FROM sys_usuario u, sys_rol r
+WHERE u.username = 'consulta' AND r.nombre_rol = 'Consulta';
+GO
+
+INSERT INTO sys_usuario_rol (id_usuario, id_rol)
+SELECT u.id_usuario, r.id_rol
+FROM sys_usuario u, sys_rol r
+WHERE u.username = 'asambleista' AND r.nombre_rol = 'Asambleista';
 
 --8.2 Catalogo Maestro (Arash - Issue #1) 
 INSERT INTO catalogo_maestro (grupo_catalogo, nombre) VALUES
