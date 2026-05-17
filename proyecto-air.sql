@@ -595,8 +595,10 @@ GO
    Java debe, en el primer arranque, reemplazarlo por un hash
    BCrypt real, o crear el usuario admin desde el codigo. NUNCA
    guardar contrasenas en texto plano.
-   Hash de ejemplo correspondiente a la palabra 'cambiar123'
-   generado con BCrypt (coste 10). Cambiarlo de inmediato. */
+   Hash BCrypt (factor de coste 12) correspondiente a la
+   contrasena 'Admin2026SglAir'. Generado con tools/GenerarHash.java.
+   Se recomienda cambiar esta contrasena en el primer arranque
+   productivo. */
 INSERT INTO sys_usuario (username, password_hash, email, activo) VALUES
     ('admin',
      '$2a$12$Dml3HUlko1YRJBX5u1hzp.c.IoHYbsoDK9f3q5Pu7bKsggek8N7lu',
