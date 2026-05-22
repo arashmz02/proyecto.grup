@@ -259,6 +259,262 @@ CREATE TABLE certificacion_emitida (
 );
 GO
 
+-- ISSUE #15: GESTIÓN DE ANULACIONES Y SUSTITUCIONES
+-- Descripción: Extiende certificacion_emitida para soportar
+-- anulaciones sin reutilización de folios y emisión de
+-- certificaciones de sustitución con trazabilidad legal.
+
+
+-- Issue 15.1  Estados de certificación en catalogo_maestro
+-- ------------------------------------------------------------
+-- El UNIQUE (grupo_catalogo, nombre) garantiza que estos
+-- INSERTs sean idempotentes si se ejecuta el script 2 veces.
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_CERTIFICACION'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('ESTADO_CERTIFICACION', 'Activa',     1),
+        ('ESTADO_CERTIFICACION', 'Anulada',    1),
+        ('ESTADO_CERTIFICACION', 'Sustituida', 1);
+END;
+GO
+
+
+-- Issue 15.2  Columnas nuevas en certificacion_emitida
+-- ------------------------------------------------------------
+ALTER TABLE certificacion_emitida
+ADD
+    id_estado                  INT           NULL,
+    motivo_anulacion           NVARCHAR(500) NULL,
+    fecha_anulacion            DATETIME2     NULL,
+    usuario_anulacion          INT           NULL,
+    id_certificacion_sustituye INT           NULL;
+GO
+
+-- Issue 15.3  Inicializar certificaciones existentes como 'Activa'
+-- ------------------------------------------------------------
+UPDATE certificacion_emitida
+SET id_estado = (
+    SELECT id_item FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_CERTIFICACION' AND nombre = 'Activa'
+)
+WHERE id_estado IS NULL;
+GO
+
+-- Issue 15.4  Hacer id_estado obligatorio + agregar constraints
+-- ------------------------------------------------------------
+ALTER TABLE certificacion_emitida
+ALTER COLUMN id_estado INT NOT NULL;
+GO
+
+ALTER TABLE certificacion_emitida
+ADD CONSTRAINT fk_certificacion_estado
+    FOREIGN KEY (id_estado) REFERENCES catalogo_maestro(id_item);
+GO
+
+ALTER TABLE certificacion_emitida
+ADD CONSTRAINT fk_certificacion_sustituye
+    FOREIGN KEY (id_certificacion_sustituye)
+    REFERENCES certificacion_emitida(id_certificacion);
+GO
+
+ALTER TABLE certificacion_emitida
+ADD CONSTRAINT fk_certificacion_usuario_anulacion
+    FOREIGN KEY (usuario_anulacion) REFERENCES sys_usuario(id_usuario);
+GO
+
+-- Issue 15.5 CHECK constraint: coherencia entre estado y campos
+-- NOTA: Usamos IDs literales (37=Activa, 38=Anulada, 39=Sustituida)
+-- porque Azure SQL no permite subconsultas en CHECK constraints.
+-- Estos IDs son fijos porque el UNIQUE (grupo_catalogo, nombre)
+-- garantiza que no se dupliquen.
+ALTER TABLE certificacion_emitida
+ADD CONSTRAINT ck_anulacion_coherente
+    CHECK (
+        (
+            id_estado = 37  -- Activa
+            AND motivo_anulacion IS NULL
+            AND fecha_anulacion IS NULL
+            AND usuario_anulacion IS NULL
+        )
+        OR
+        (
+            id_estado IN (38, 39)  -- Anulada o Sustituida
+            AND motivo_anulacion IS NOT NULL
+            AND fecha_anulacion IS NOT NULL
+            AND usuario_anulacion IS NOT NULL
+        )
+    );
+GO
+
+-- Issue 15.6  STORED PROCEDURE: Anular certificación
+-- ------------------------------------------------------------
+-- Cambia el estado a 'Anulada'. NO reutiliza el folio.
+-- Lanza error si la certificación ya está anulada o sustituida.
+CREATE OR ALTER PROCEDURE sp_anular_certificacion
+    @folio_unico       NVARCHAR(30),
+    @motivo            NVARCHAR(500),
+    @usuario_anulacion INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @id_certificacion INT;
+    DECLARE @id_estado_actual INT;
+    DECLARE @id_estado_activa INT;
+    DECLARE @id_estado_anulada INT;
+
+    -- Obtener IDs de estados
+    SELECT @id_estado_activa = id_item
+    FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_CERTIFICACION' AND nombre = 'Activa';
+
+    SELECT @id_estado_anulada = id_item
+    FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_CERTIFICACION' AND nombre = 'Anulada';
+
+    -- Buscar la certificación
+    SELECT
+        @id_certificacion = id_certificacion,
+        @id_estado_actual = id_estado
+    FROM certificacion_emitida
+    WHERE folio_unico = @folio_unico;
+
+    -- Validaciones
+    IF @id_certificacion IS NULL
+    BEGIN
+        RAISERROR('No existe una certificación con el folio %s.', 16, 1, @folio_unico);
+        RETURN;
+    END;
+
+    IF @id_estado_actual <> @id_estado_activa
+    BEGIN
+        RAISERROR('Solo se pueden anular certificaciones en estado Activa. Folio: %s', 16, 1, @folio_unico);
+        RETURN;
+    END;
+
+    IF LTRIM(RTRIM(ISNULL(@motivo, ''))) = ''
+    BEGIN
+        RAISERROR('El motivo de anulación es obligatorio.', 16, 1);
+        RETURN;
+    END;
+
+    -- Ejecutar anulación
+    UPDATE certificacion_emitida
+    SET
+        id_estado         = @id_estado_anulada,
+        motivo_anulacion  = @motivo,
+        fecha_anulacion   = SYSUTCDATETIME(),
+        usuario_anulacion = @usuario_anulacion
+    WHERE id_certificacion = @id_certificacion;
+
+    PRINT 'Certificación ' + @folio_unico + ' anulada correctamente.';
+END;
+GO
+
+
+-- Issue 15.7  STORED PROCEDURE: Emitir certificación de sustitución
+-- ------------------------------------------------------------
+-- Marca la certificación anterior como 'Sustituida' y crea
+-- una nueva que apunta a la original con id_certificacion_sustituye.
+-- El nuevo folio lo genera la lógica del Issue #1 (foliado).
+CREATE OR ALTER PROCEDURE sp_emitir_sustitucion
+    @folio_anterior        NVARCHAR(30),
+    @motivo                NVARCHAR(500),
+    @usuario_secretaria    INT,
+    @nuevo_folio           NVARCHAR(30) OUTPUT,
+    @nuevo_id_certificacion INT         OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @id_cert_anterior INT;
+    DECLARE @id_asambleista   INT;
+    DECLARE @hash_anterior    NVARCHAR(80);
+    DECLARE @id_estado_activa INT;
+    DECLARE @id_estado_sustituida INT;
+
+    SELECT @id_estado_activa = id_item
+    FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_CERTIFICACION' AND nombre = 'Activa';
+
+    SELECT @id_estado_sustituida = id_item
+    FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_CERTIFICACION' AND nombre = 'Sustituida';
+
+    -- Buscar certificación anterior
+    SELECT
+        @id_cert_anterior = id_certificacion,
+        @id_asambleista   = id_asambleista,
+        @hash_anterior    = hash_seguridad
+    FROM certificacion_emitida
+    WHERE folio_unico = @folio_anterior;
+
+    IF @id_cert_anterior IS NULL
+    BEGIN
+        RAISERROR('No existe una certificación con el folio %s.', 16, 1, @folio_anterior);
+        RETURN;
+    END;
+
+    -- La anterior debe estar Activa para poder sustituirla
+    IF NOT EXISTS (
+        SELECT 1 FROM certificacion_emitida
+        WHERE id_certificacion = @id_cert_anterior AND id_estado = @id_estado_activa
+    )
+    BEGIN
+        RAISERROR('Solo se pueden sustituir certificaciones en estado Activa.', 16, 1);
+        RETURN;
+    END;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- Paso 1: Marcar la anterior como 'Sustituida'
+        UPDATE certificacion_emitida
+        SET
+            id_estado         = @id_estado_sustituida,
+            motivo_anulacion  = @motivo,
+            fecha_anulacion   = SYSUTCDATETIME(),
+            usuario_anulacion = @usuario_secretaria
+        WHERE id_certificacion = @id_cert_anterior;
+
+        -- Paso 2: Crear la nueva certificación (folio nuevo del Issue #1)
+        -- NOTA: el folio definitivo lo asigna el SP del Issue #1.
+        --       Aquí solo dejamos el placeholder; el motor de PDF
+        --       (Arash, Issue #17) llamará al SP de foliado y luego
+        --       hará UPDATE para registrar el hash final.
+        INSERT INTO certificacion_emitida (
+            id_asambleista,
+            folio_unico,
+            hash_seguridad,
+            usuario_secretaria,
+            id_estado,
+            id_certificacion_sustituye
+        )
+        VALUES (
+            @id_asambleista,
+            'PENDIENTE',  -- el SP de foliado del Issue #1 lo actualiza
+            NULL,         -- el hash lo calcula el Issue #13
+            @usuario_secretaria,
+            @id_estado_activa,
+            @id_cert_anterior
+        );
+
+        SET @nuevo_id_certificacion = SCOPE_IDENTITY();
+        SET @nuevo_folio = 'PENDIENTE';
+
+        COMMIT TRANSACTION;
+
+        PRINT 'Sustitución registrada. Folio anterior: ' + @folio_anterior;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
 
 /* 7. TRIGGERS
    Nota general de migracion PostgreSQL -> T-SQL:
@@ -552,6 +808,48 @@ BEGIN
 END;
 GO
 
+
+-- Issue 15  TRIGGER: tg_no_repudio_cert (no repudio)
+-- ------------------------------------------------------------
+-- Bloquea cualquier intento de UPDATE sobre folio_unico,
+-- hash_seguridad, id_asambleista o fecha_emision en certificaciones
+-- ya emitidas. Los campos de anulación SÍ se pueden modificar.
+-- También bloquea DELETE de certificaciones (fe pública inalterable).
+CREATE OR ALTER TRIGGER tg_no_repudio_cert
+ON certificacion_emitida
+AFTER UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Bloquear DELETE (las certificaciones nunca se borran, solo se anulan)
+    IF EXISTS (SELECT 1 FROM deleted) AND NOT EXISTS (SELECT 1 FROM inserted)
+    BEGIN
+        RAISERROR('No se permite eliminar certificaciones emitidas. Utilice sp_anular_certificacion.', 16, 1);
+        ROLLBACK TRANSACTION;
+        RETURN;
+    END;
+
+    -- Bloquear UPDATE de campos inmutables (no repudio del Art. 301 LGAP)
+    IF UPDATE(folio_unico) OR UPDATE(hash_seguridad)
+       OR UPDATE(id_asambleista) OR UPDATE(fecha_emision)
+    BEGIN
+        -- Excepción: permitir cuando el folio anterior era 'PENDIENTE'
+        -- (caso de sustitución que aún no tiene folio asignado por el #1)
+        IF NOT EXISTS (
+            SELECT 1
+            FROM deleted d
+            INNER JOIN inserted i ON d.id_certificacion = i.id_certificacion
+            WHERE d.folio_unico = 'PENDIENTE' AND i.folio_unico <> 'PENDIENTE'
+        )
+        BEGIN
+            RAISERROR('Los campos folio_unico, hash_seguridad, id_asambleista y fecha_emision son inmutables después de la emisión.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+    END;
+END;
+GO
 
 --8. DATOS SEMILLA
 
@@ -858,6 +1156,7 @@ INSERT INTO nombramiento (id_asambleista, id_sector, id_puesto, fecha_inicio, fe
     (@id_a4, @sector_admin,   @puesto_asamb, '2021-01-01', '2022-12-31', 'Inactivo', @id_admin_user),
     (@id_a5, @sector_docente, @puesto_asamb, '2024-01-15', NULL,         'Vigente',  @id_admin_user);
 GO
+
 
 --FIN DEL SCRIPT proyecto-air.sql 
 PRINT 'proyecto-air.sql ejecutado correctamente.';
