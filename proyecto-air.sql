@@ -31,6 +31,21 @@ IF OBJECT_ID('tg_auditoria_nombramiento', 'TR')IS NOT NULL DROP TRIGGER tg_audit
 IF OBJECT_ID('tg_auditoria_asambleista', 'TR') IS NOT NULL DROP TRIGGER tg_auditoria_asambleista;
 
 --Tablas (hijas antes que padres)
+
+IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'fk_nombramiento_resolucion')
+    ALTER TABLE nombramiento DROP CONSTRAINT fk_nombramiento_resolucion;
+IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'fk_elemento_acuerdo_origen')
+    ALTER TABLE elemento_normativo DROP CONSTRAINT fk_elemento_acuerdo_origen;
+
+IF OBJECT_ID('asistencia_sesion_plenaria', 'U') IS NOT NULL DROP TABLE asistencia_sesion_plenaria;
+IF OBJECT_ID('reforma_aplicada', 'U')           IS NOT NULL DROP TABLE reforma_aplicada;
+IF OBJECT_ID('resolucion', 'U')                 IS NOT NULL DROP TABLE resolucion;
+IF OBJECT_ID('punto_agenda', 'U')               IS NOT NULL DROP TABLE punto_agenda;
+IF OBJECT_ID('bitacora_propuesta', 'U')         IS NOT NULL DROP TABLE bitacora_propuesta;
+IF OBJECT_ID('proponente_propuesta', 'U')       IS NOT NULL DROP TABLE proponente_propuesta;
+IF OBJECT_ID('propuesta', 'U')                  IS NOT NULL DROP TABLE propuesta;
+IF OBJECT_ID('acta', 'U')                       IS NOT NULL DROP TABLE acta;
+IF OBJECT_ID('sesiones', 'U')                   IS NOT NULL DROP TABLE sesiones;
 IF OBJECT_ID('certificacion_emitida', 'U')     IS NOT NULL DROP TABLE certificacion_emitida;
 IF OBJECT_ID('control_folio', 'U')             IS NOT NULL DROP TABLE control_folio;
 IF OBJECT_ID('elemento_normativo', 'U')        IS NOT NULL DROP TABLE elemento_normativo;
@@ -257,6 +272,158 @@ CREATE TABLE certificacion_emitida (
     CONSTRAINT fk_certificacion_asambleista FOREIGN KEY (id_asambleista)     REFERENCES asambleista(id_asambleista),
     CONSTRAINT fk_certificacion_usuario     FOREIGN KEY (usuario_secretaria) REFERENCES sys_usuario(id_usuario)
 );
+GO
+
+/* 
+   6.5 SPRINT 3 - ISSUE #10 PARTE II
+   MODULO DE SESIONES, PROPUESTAS Y RESOLUCIONES
+   Responsable: Josue 
+   Nota: este modulo APROVECHA el trigger tg_vigencia_normativa del
+   Sprint 2. Cuando un INSERT en elemento_normativo marca una version
+   nueva como 'Vigente', el trigger archiva la anterior como
+   'Historico' automaticamente. No se requieren triggers nuevos.
+ */
+
+--6.5.1 Sesiones plenarias
+CREATE TABLE sesiones (
+    id_sesion         INT IDENTITY(1,1) PRIMARY KEY,
+    numero_sesion     NVARCHAR(20) NOT NULL UNIQUE,
+    fecha             DATE NOT NULL,
+    id_tipo_sesion    INT NOT NULL,
+    id_tipo_modalidad INT NOT NULL,
+    quorum_requerido  INT NOT NULL DEFAULT 0,
+    link_acta         NVARCHAR(500),
+    CONSTRAINT fk_sesion_tipo      FOREIGN KEY (id_tipo_sesion)    REFERENCES catalogo_maestro(id_item),
+    CONSTRAINT fk_sesion_modalidad FOREIGN KEY (id_tipo_modalidad) REFERENCES catalogo_maestro(id_item),
+    CONSTRAINT chk_quorum_positivo CHECK (quorum_requerido >= 0)
+);
+GO
+
+--6.5.2 Actas (1:1 con sesion: UNIQUE en id_sesion garantiza una acta por sesion)
+CREATE TABLE acta (
+    id_acta          INT IDENTITY(1,1) PRIMARY KEY,
+    id_sesion        INT NOT NULL UNIQUE,
+    fecha_aprobacion DATE,
+    url_documento    NVARCHAR(500),
+    observaciones    NVARCHAR(MAX),
+    CONSTRAINT fk_acta_sesion FOREIGN KEY (id_sesion) REFERENCES sesiones(id_sesion)
+);
+GO
+
+--6.5.3 Propuestas (con recursividad para conciliadas via id_propuesta_padre)
+CREATE TABLE propuesta (
+    id_propuesta              INT IDENTITY(1,1) PRIMARY KEY,
+    codigo_air                NVARCHAR(30)  NOT NULL UNIQUE,
+    titulo                    NVARCHAR(300) NOT NULL,
+    texto_sustitutivo         NVARCHAR(MAX),
+    id_reglamento_base        INT,
+    id_propuesta_padre        INT,
+    id_etapa_propuesta        INT NOT NULL,
+    id_estado_propuesta       INT NOT NULL,
+    id_tipo_mayoria_requerida INT NOT NULL,
+    link_documentacion        NVARCHAR(500),
+    fecha_registro            DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT fk_propuesta_reglamento FOREIGN KEY (id_reglamento_base)        REFERENCES reglamento(id_reglamento),
+    CONSTRAINT fk_propuesta_padre      FOREIGN KEY (id_propuesta_padre)        REFERENCES propuesta(id_propuesta),
+    CONSTRAINT fk_propuesta_etapa      FOREIGN KEY (id_etapa_propuesta)        REFERENCES catalogo_maestro(id_item),
+    CONSTRAINT fk_propuesta_estado     FOREIGN KEY (id_estado_propuesta)       REFERENCES catalogo_maestro(id_item),
+    CONSTRAINT fk_propuesta_mayoria    FOREIGN KEY (id_tipo_mayoria_requerida) REFERENCES catalogo_maestro(id_item)
+);
+GO
+
+--6.5.4 Proponentes (autoria multiple, relacion N:M)
+CREATE TABLE proponente_propuesta (
+    id_proponente_propuesta INT IDENTITY(1,1) PRIMARY KEY,
+    id_propuesta            INT NOT NULL,
+    id_asambleista          INT NOT NULL,
+    fecha_registro          DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT fk_proponente_propuesta   FOREIGN KEY (id_propuesta)   REFERENCES propuesta(id_propuesta),
+    CONSTRAINT fk_proponente_asambleista FOREIGN KEY (id_asambleista) REFERENCES asambleista(id_asambleista),
+    CONSTRAINT uq_proponente UNIQUE (id_propuesta, id_asambleista)
+);
+GO
+
+--6.5.5 Bitacora de cambios de estado de las propuestas
+CREATE TABLE bitacora_propuesta (
+    id_registro_bitacora INT IDENTITY(1,1) PRIMARY KEY,
+    id_propuesta         INT NOT NULL,
+    id_reglamento_base   INT,
+    id_etapa_propuesta   INT NOT NULL,
+    id_estado_propuesta  INT NOT NULL,
+    titulo               NVARCHAR(300) NOT NULL,
+    codigo_air           NVARCHAR(30)  NOT NULL,
+    fecha_modificacion   DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    usuario_modificacion INT,
+    CONSTRAINT fk_bitprop_propuesta  FOREIGN KEY (id_propuesta)         REFERENCES propuesta(id_propuesta),
+    CONSTRAINT fk_bitprop_reglamento FOREIGN KEY (id_reglamento_base)   REFERENCES reglamento(id_reglamento),
+    CONSTRAINT fk_bitprop_etapa      FOREIGN KEY (id_etapa_propuesta)   REFERENCES catalogo_maestro(id_item),
+    CONSTRAINT fk_bitprop_estado     FOREIGN KEY (id_estado_propuesta)  REFERENCES catalogo_maestro(id_item),
+    CONSTRAINT fk_bitprop_usuario    FOREIGN KEY (usuario_modificacion) REFERENCES sys_usuario(id_usuario)
+);
+GO
+
+--6.5.6 Puntos de agenda (orden del dia de cada sesion)
+CREATE TABLE punto_agenda (
+    id_punto_agenda INT IDENTITY(1,1) PRIMARY KEY,
+    id_sesion       INT NOT NULL,
+    id_propuesta    INT NOT NULL,
+    orden           INT NOT NULL,
+    descripcion     NVARCHAR(500),
+    CONSTRAINT fk_punto_sesion    FOREIGN KEY (id_sesion)    REFERENCES sesiones(id_sesion),
+    CONSTRAINT fk_punto_propuesta FOREIGN KEY (id_propuesta) REFERENCES propuesta(id_propuesta),
+    CONSTRAINT uq_punto_sesion_propuesta UNIQUE (id_sesion, id_propuesta),
+    CONSTRAINT uq_punto_sesion_orden     UNIQUE (id_sesion, orden)
+);
+GO
+
+--6.5.7 Resoluciones (numero oficial AIR-RES-XXX-YYYY)
+CREATE TABLE resolucion (
+    id_resolucion     INT IDENTITY(1,1) PRIMARY KEY,
+    id_punto_agenda   INT NOT NULL UNIQUE,
+    numero_resolucion NVARCHAR(30) NOT NULL UNIQUE,
+    fecha_emision     DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT fk_resolucion_punto FOREIGN KEY (id_punto_agenda) REFERENCES punto_agenda(id_punto_agenda)
+);
+GO
+
+--6.5.8 Reforma aplicada (conecta una resolucion con el cambio al reglamento)
+CREATE TABLE reforma_aplicada (
+    id_reforma            INT IDENTITY(1,1) PRIMARY KEY,
+    id_resolucion         INT NOT NULL,
+    id_elemento_normativo INT NOT NULL,
+    id_tipo_reforma       INT NOT NULL,
+    texto_anterior        NVARCHAR(MAX),
+    texto_nuevo           NVARCHAR(MAX),
+    fecha_inicio_vigencia DATE NOT NULL DEFAULT CAST(SYSUTCDATETIME() AS DATE),
+    CONSTRAINT fk_reforma_resolucion FOREIGN KEY (id_resolucion)         REFERENCES resolucion(id_resolucion),
+    CONSTRAINT fk_reforma_elemento   FOREIGN KEY (id_elemento_normativo) REFERENCES elemento_normativo(id_elemento),
+    CONSTRAINT fk_reforma_tipo       FOREIGN KEY (id_tipo_reforma)       REFERENCES catalogo_maestro(id_item)
+);
+GO
+
+--6.5.9 Asistencia a sesiones plenarias
+CREATE TABLE asistencia_sesion_plenaria (
+    id_asistencia        INT IDENTITY(1,1) PRIMARY KEY,
+    id_sesion            INT NOT NULL,
+    id_asambleista       INT NOT NULL,
+    id_estado_asistencia INT NOT NULL,
+    CONSTRAINT fk_asistencia_sesion      FOREIGN KEY (id_sesion)            REFERENCES sesiones(id_sesion),
+    CONSTRAINT fk_asistencia_asambleista FOREIGN KEY (id_asambleista)       REFERENCES asambleista(id_asambleista),
+    CONSTRAINT fk_asistencia_estado      FOREIGN KEY (id_estado_asistencia) REFERENCES catalogo_maestro(id_item),
+    CONSTRAINT uq_asistencia_sesion_asambleista UNIQUE (id_sesion, id_asambleista)
+);
+GO
+
+--6.5.10 FK pendientes del Sprint 2
+-- nombramiento.resolucion_id y elemento_normativo.id_acuerdo_origen existian como columnas sueltas. Ahora que existe 'resolucion' podemos activar la integridad referencial.
+ALTER TABLE nombramiento
+    ADD CONSTRAINT fk_nombramiento_resolucion
+        FOREIGN KEY (resolucion_id) REFERENCES resolucion(id_resolucion);
+GO
+
+ALTER TABLE elemento_normativo
+    ADD CONSTRAINT fk_elemento_acuerdo_origen
+        FOREIGN KEY (id_acuerdo_origen) REFERENCES resolucion(id_resolucion);
 GO
 
 
@@ -857,6 +1024,120 @@ INSERT INTO nombramiento (id_asambleista, id_sector, id_puesto, fecha_inicio, fe
     (@id_a3, @sector_estud,   @puesto_asamb, '2024-03-01', NULL,         'Vigente',  @id_admin_user),
     (@id_a4, @sector_admin,   @puesto_asamb, '2021-01-01', '2022-12-31', 'Inactivo', @id_admin_user),
     (@id_a5, @sector_docente, @puesto_asamb, '2024-01-15', NULL,         'Vigente',  @id_admin_user);
+GO
+
+/* 8.6 SPRINT 3 - ISSUE #10 PARTE II - DATOS SEMILLA
+Responsable: Josue - Issue #10 Parte II
+Demuestra el flujo completo del proceso legislativo:
+1. Dos sesiones (una ordinaria, una extraordinaria)
+2. Una propuesta base + una propuesta conciliada (recursion)
+3. Dos proponentes (autoria multiple N:M)
+4. Un punto de agenda
+5. Una resolucion oficial
+6. Una reforma_aplicada que apunta al Articulo 18
+7. Asistencia a la sesion ordinaria*/
+
+--ids de catalogos
+DECLARE @ts_ordinaria      INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='TIPO_SESION'       AND nombre='Ordinaria');
+DECLARE @ts_extraordinaria INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='TIPO_SESION'       AND nombre='Extraordinaria');
+DECLARE @mod_presencial    INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='TIPO_MODALIDAD'    AND nombre='Presencial');
+DECLARE @mod_virtual       INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='TIPO_MODALIDAD'    AND nombre='Virtual');
+DECLARE @etapa_aprobacion  INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='ETAPA_PROPUESTA'   AND nombre='Aprobacion');
+DECLARE @estado_aprobada   INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='ESTADO_PROPUESTA'  AND nombre='Aprobada');
+DECLARE @estado_endisc     INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='ESTADO_PROPUESTA'  AND nombre='En Discusion');
+DECLARE @mayoria_calif     INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='TIPO_MAYORIA'      AND nombre='Calificada 2 tercios');
+DECLARE @tipo_modif        INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='TIPO_REFORMA'      AND nombre='Modificacion');
+DECLARE @est_asist_pres    INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='ESTADO_ASISTENCIA' AND nombre='Presente');
+DECLARE @est_asist_aus     INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='ESTADO_ASISTENCIA' AND nombre='Ausente');
+
+--ids de reglamento y articulo base
+DECLARE @id_reg_eoitcr INT = (SELECT id_reglamento FROM reglamento WHERE sigla='EOITCR');
+DECLARE @id_art_18 INT = (
+    SELECT id_elemento FROM elemento_normativo
+    WHERE id_reglamento=@id_reg_eoitcr AND numero_etiqueta='18' AND id_estado_vigencia=1);
+
+--ids de asambleistas
+DECLARE @asamb_ana    INT = (SELECT id_asambleista FROM asambleista WHERE cedula='1-1111-1111');
+DECLARE @asamb_carlos INT = (SELECT id_asambleista FROM asambleista WHERE cedula='2-2222-2222');
+DECLARE @asamb_maria  INT = (SELECT id_asambleista FROM asambleista WHERE cedula='3-3333-3333');
+DECLARE @asamb_jose   INT = (SELECT id_asambleista FROM asambleista WHERE cedula='4-4444-4444');
+DECLARE @asamb_laura  INT = (SELECT id_asambleista FROM asambleista WHERE cedula='5-5555-5555');
+
+DECLARE @id_admin INT = (SELECT id_usuario FROM sys_usuario WHERE username='admin');
+
+--Sesion ordinaria
+INSERT INTO sesiones (numero_sesion, fecha, id_tipo_sesion, id_tipo_modalidad, quorum_requerido)
+VALUES ('AIR-110-2024', '2024-09-25', @ts_ordinaria, @mod_presencial, 100);
+DECLARE @id_sesion1 INT = SCOPE_IDENTITY();
+
+--Sesion extraordinaria
+INSERT INTO sesiones (numero_sesion, fecha, id_tipo_sesion, id_tipo_modalidad, quorum_requerido)
+VALUES ('AIR-111-2024', '2024-10-15', @ts_extraordinaria, @mod_virtual, 100);
+
+--Acta de la sesion ordinaria
+INSERT INTO acta (id_sesion, fecha_aprobacion, url_documento, observaciones)
+VALUES (@id_sesion1, '2024-10-15',
+        'https://tec.cr/air/actas/AIR-110-2024.pdf',
+        'Acta aprobada en la sesion AIR-111-2024.');
+
+--Propuesta base
+INSERT INTO propuesta (codigo_air, titulo, texto_sustitutivo, id_reglamento_base,
+                       id_propuesta_padre, id_etapa_propuesta, id_estado_propuesta,
+                       id_tipo_mayoria_requerida, link_documentacion)
+VALUES ('AIR-99-2024',
+        'Reforma al Articulo 18 del Estatuto Organico - Inclusion de criterios de equidad',
+        'La Asamblea Institucional Representativa es el organo de mayor jerarquia del Instituto, con responsabilidad sobre la equidad institucional y la sostenibilidad academica.',
+        @id_reg_eoitcr, NULL, @etapa_aprobacion, @estado_aprobada, @mayoria_calif,
+        'https://tec.cr/air/propuestas/AIR-99-2024.pdf');
+DECLARE @id_prop_base INT = SCOPE_IDENTITY();
+
+--Propuesta conciliada (hereda de la base via id_propuesta_padre)
+INSERT INTO propuesta (codigo_air, titulo, texto_sustitutivo, id_reglamento_base,
+                       id_propuesta_padre, id_etapa_propuesta, id_estado_propuesta,
+                       id_tipo_mayoria_requerida, link_documentacion)
+VALUES ('AIR-99-CONC-2024',
+        'Conciliacion del AIR-99-2024',
+        'Texto conciliado tras el analisis en comision.',
+        @id_reg_eoitcr, @id_prop_base, @etapa_aprobacion, @estado_endisc, @mayoria_calif,
+        'https://tec.cr/air/propuestas/AIR-99-CONC-2024.pdf');
+
+--Proponentes (autoria multiple N:M)
+INSERT INTO proponente_propuesta (id_propuesta, id_asambleista) VALUES
+    (@id_prop_base, @asamb_ana),
+    (@id_prop_base, @asamb_carlos);
+
+--Bitacora del cambio de estado a 'Aprobada'
+INSERT INTO bitacora_propuesta (id_propuesta, id_reglamento_base, id_etapa_propuesta,
+                                id_estado_propuesta, titulo, codigo_air, usuario_modificacion)
+VALUES (@id_prop_base, @id_reg_eoitcr, @etapa_aprobacion, @estado_aprobada,
+        'Reforma al Articulo 18 del Estatuto Organico - Inclusion de criterios de equidad',
+        'AIR-99-2024', @id_admin);
+
+--Punto de agenda
+INSERT INTO punto_agenda (id_sesion, id_propuesta, orden, descripcion)
+VALUES (@id_sesion1, @id_prop_base, 1, 'Discusion y votacion de la propuesta AIR-99-2024.');
+DECLARE @id_punto1 INT = SCOPE_IDENTITY();
+
+--Resolucion oficial
+INSERT INTO resolucion (id_punto_agenda, numero_resolucion, fecha_emision)
+VALUES (@id_punto1, 'AIR-RES-001-2024', '2024-09-25');
+DECLARE @id_resolucion1 INT = SCOPE_IDENTITY();
+
+--Reforma aplicada (conecta resolucion con articulo 18)
+INSERT INTO reforma_aplicada (id_resolucion, id_elemento_normativo, id_tipo_reforma,
+                              texto_anterior, texto_nuevo, fecha_inicio_vigencia)
+VALUES (@id_resolucion1, @id_art_18, @tipo_modif,
+        'La Asamblea Institucional Representativa es el organo de mayor jerarquia del Instituto.',
+        'La Asamblea Institucional Representativa es el organo de mayor jerarquia del Instituto, con responsabilidad sobre la equidad institucional y la sostenibilidad academica.',
+        '2024-09-25');
+
+--Asistencia: 4 presentes, 1 ausente (cumple el quorum requerido)
+INSERT INTO asistencia_sesion_plenaria (id_sesion, id_asambleista, id_estado_asistencia) VALUES
+    (@id_sesion1, @asamb_ana,    @est_asist_pres),
+    (@id_sesion1, @asamb_carlos, @est_asist_pres),
+    (@id_sesion1, @asamb_maria,  @est_asist_pres),
+    (@id_sesion1, @asamb_jose,   @est_asist_aus),
+    (@id_sesion1, @asamb_laura,  @est_asist_pres);
 GO
 
 --FIN DEL SCRIPT proyecto-air.sql 
