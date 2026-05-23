@@ -1338,3 +1338,160 @@ GO
 
 -- ============================================================
 -- FIN ISSUE #13
+
+
+-- ISSUE #12: MOTOR DE VOTACIONES
+-- Autor: Frank
+-- Sprint: 3
+-- Descripci≤n: Registro de votaciones (nominales y secretas)
+-- con soporte para mayorφa simple (50%+1) y calificada (66%).
+-- Incluye tabla de resoluciones derivadas de cada votaci≤n.
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- 12.1  Tipos de mayorφa en catalogo_maestro
+-- ------------------------------------------------------------
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'TIPO_MAYORIA'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('TIPO_MAYORIA', 'Simple',     1),
+        ('TIPO_MAYORIA', 'Calificada', 1);
+END;
+GO
+
+-- ------------------------------------------------------------
+-- 12.2  Tipos de voto en catalogo_maestro
+-- ------------------------------------------------------------
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'TIPO_VOTO'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('TIPO_VOTO', 'Nominal', 1),
+        ('TIPO_VOTO', 'Secreto', 1);
+END;
+GO
+
+-- ------------------------------------------------------------
+-- 12.3  Sentido del voto en catalogo_maestro
+-- ------------------------------------------------------------
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'SENTIDO_VOTO'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('SENTIDO_VOTO', 'A favor',    1),
+        ('SENTIDO_VOTO', 'En contra',  1),
+        ('SENTIDO_VOTO', 'Abstencion', 1);
+END;
+GO
+
+-- ------------------------------------------------------------
+-- 12.4  Estado de votaci≤n en catalogo_maestro
+-- ------------------------------------------------------------
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_VOTACION'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('ESTADO_VOTACION', 'Abierta',    1),
+        ('ESTADO_VOTACION', 'Cerrada',    1),
+        ('ESTADO_VOTACION', 'Aprobada',   1),
+        ('ESTADO_VOTACION', 'Rechazada',  1);
+END;
+GO
+
+-- ------------------------------------------------------------
+-- 12.5  Tabla: votacion
+-- ------------------------------------------------------------
+-- Una votacion pertenece a una sesion y representa un
+-- punto puesto a consideracion del pleno.
+CREATE TABLE votacion (
+    id_votacion        INT IDENTITY(1,1) PRIMARY KEY,
+    id_sesion          INT NOT NULL,
+    titulo             NVARCHAR(300) NOT NULL,
+    descripcion        NVARCHAR(MAX) NULL,
+    id_tipo_voto       INT NOT NULL,
+    id_tipo_mayoria    INT NOT NULL,
+    id_estado_votacion INT NOT NULL,
+    total_presentes    INT NULL,
+    votos_favor        INT NOT NULL DEFAULT 0,
+    votos_contra       INT NOT NULL DEFAULT 0,
+    votos_abstencion   INT NOT NULL DEFAULT 0,
+    fecha_apertura     DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    fecha_cierre       DATETIME2 NULL,
+    CONSTRAINT fk_votacion_sesion
+        FOREIGN KEY (id_sesion) REFERENCES sesion(id_sesion),
+    CONSTRAINT fk_votacion_tipo_voto
+        FOREIGN KEY (id_tipo_voto) REFERENCES catalogo_maestro(id_item),
+    CONSTRAINT fk_votacion_tipo_mayoria
+        FOREIGN KEY (id_tipo_mayoria) REFERENCES catalogo_maestro(id_item),
+    CONSTRAINT fk_votacion_estado
+        FOREIGN KEY (id_estado_votacion) REFERENCES catalogo_maestro(id_item),
+    CONSTRAINT ck_conteo_no_negativo
+        CHECK (votos_favor >= 0 AND votos_contra >= 0 AND votos_abstencion >= 0)
+);
+GO
+
+-- ------------------------------------------------------------
+-- 12.6  Tabla: voto
+-- ------------------------------------------------------------
+-- Registro individual de cada voto emitido.
+-- En votos secretos, id_asambleista puede ser NULL
+-- (solo se cuenta el agregado, no se identifica al votante).
+CREATE TABLE voto (
+    id_voto         INT IDENTITY(1,1) PRIMARY KEY,
+    id_votacion     INT NOT NULL,
+    id_asambleista  INT NULL,
+    id_sentido_voto INT NOT NULL,
+    fecha_voto      DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT fk_voto_votacion
+        FOREIGN KEY (id_votacion) REFERENCES votacion(id_votacion),
+    CONSTRAINT fk_voto_asambleista
+        FOREIGN KEY (id_asambleista) REFERENCES asambleista(id_asambleista),
+    CONSTRAINT fk_voto_sentido
+        FOREIGN KEY (id_sentido_voto) REFERENCES catalogo_maestro(id_item)
+);
+GO
+
+-- Constraint: en votos nominales no puede haber duplicados por asambleista
+-- (en votos secretos id_asambleista es NULL y SQL Server permite multiples NULLs)
+CREATE UNIQUE INDEX uq_voto_nominal_unico
+ON voto(id_votacion, id_asambleista)
+WHERE id_asambleista IS NOT NULL;
+GO
+
+-- ------------------------------------------------------------
+-- 12.7  Tabla: resolucion
+-- ------------------------------------------------------------
+-- Una resolucion es el acto legal que surge de una votacion
+-- aprobada. Lleva el numero oficial que cita la certificacion.
+CREATE TABLE resolucion (
+    id_resolucion     INT IDENTITY(1,1) PRIMARY KEY,
+    id_votacion       INT NOT NULL,
+    numero_resolucion NVARCHAR(50) NOT NULL,
+    descripcion       NVARCHAR(MAX) NOT NULL,
+    fecha_emision     DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    es_firme          BIT NOT NULL DEFAULT 0,
+    CONSTRAINT uq_resolucion_numero UNIQUE (numero_resolucion),
+    CONSTRAINT fk_resolucion_votacion
+        FOREIGN KEY (id_votacion) REFERENCES votacion(id_votacion)
+);
+GO
+
+-- ------------------------------------------------------------
+-- 12.8  ═ndices para queries de motor de votaciones
+-- ------------------------------------------------------------
+CREATE INDEX idx_voto_votacion ON voto(id_votacion);
+CREATE INDEX idx_votacion_sesion ON votacion(id_sesion);
+CREATE INDEX idx_resolucion_votacion ON resolucion(id_votacion);
+GO
+
+-- ============================================================
+-- FIN ISSUE #12
