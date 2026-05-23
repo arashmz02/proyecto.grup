@@ -51,7 +51,7 @@ public class AsambleistaAjaxServlet extends HttpServlet {
     private List<Map<String, Object>> buscarAsambleistas(Connection conn, String q)
             throws SQLException {
         List<Map<String, Object>> lista = new ArrayList<>();
-        String sql = "SELECT TOP 10 asambleista_id, nombre, cedula " +
+        String sql = "SELECT TOP 10 id_asambleista, nombre, cedula " +
                      "FROM asambleista " +
                      "WHERE nombre LIKE ? OR cedula LIKE ? " +
                      "ORDER BY nombre";
@@ -61,7 +61,7 @@ public class AsambleistaAjaxServlet extends HttpServlet {
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
                 Map<String, Object> m = new HashMap<>();
-                m.put("id", rs.getInt("asambleista_id"));
+                m.put("id", rs.getInt("id_asambleista"));
                 m.put("nombre", rs.getString("nombre"));
                 m.put("cedula", rs.getString("cedula"));
                 lista.add(m);
@@ -76,13 +76,12 @@ public class AsambleistaAjaxServlet extends HttpServlet {
         String sql = "SELECT a.nombre, a.cedula, " +
                      "ISNULL(cm.nombre, 'Sin sector') AS sector_nombre, " +
                      "CONVERT(VARCHAR, n.fecha_inicio, 103) AS fecha_inicio, " +
-                     "CASE WHEN n.fecha_fin IS NULL THEN 'Vigente' " +
-                     "     ELSE 'Finalizado' END AS estado_nombramiento " +
+                     "ISNULL(n.estado, 'Sin nombramiento') AS estado_nombramiento " +
                      "FROM asambleista a " +
-                     "LEFT JOIN nombramiento n ON n.asambleista_id = a.asambleista_id " +
-                     "    AND (n.estado = 'Vigente' OR n.fecha_fin IS NULL) " +
-                     "LEFT JOIN cat_maestro cm ON cm.id_item = n.sector_id " +
-                     "WHERE a.asambleista_id = ?";
+                     "LEFT JOIN nombramiento n ON n.id_asambleista = a.id_asambleista " +
+                     "    AND n.estado = 'Vigente' " +
+                     "LEFT JOIN catalogo_maestro cm ON cm.id_item = n.id_sector " +
+                     "WHERE a.id_asambleista = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             ResultSet rs = ps.executeQuery();
