@@ -259,6 +259,262 @@ CREATE TABLE certificacion_emitida (
 );
 GO
 
+-- ISSUE #15: GESTI脫N DE ANULACIONES Y SUSTITUCIONES
+-- Descripci贸n: Extiende certificacion_emitida para soportar
+-- anulaciones sin reutilizaci贸n de folios y emisi贸n de
+-- certificaciones de sustituci贸n con trazabilidad legal.
+
+
+-- Issue 15.1  Estados de certificaci贸n en catalogo_maestro
+-- ------------------------------------------------------------
+-- El UNIQUE (grupo_catalogo, nombre) garantiza que estos
+-- INSERTs sean idempotentes si se ejecuta el script 2 veces.
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_CERTIFICACION'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('ESTADO_CERTIFICACION', 'Activa',     1),
+        ('ESTADO_CERTIFICACION', 'Anulada',    1),
+        ('ESTADO_CERTIFICACION', 'Sustituida', 1);
+END;
+GO
+
+
+-- Issue 15.2  Columnas nuevas en certificacion_emitida
+-- ------------------------------------------------------------
+ALTER TABLE certificacion_emitida
+ADD
+    id_estado                  INT           NULL,
+    motivo_anulacion           NVARCHAR(500) NULL,
+    fecha_anulacion            DATETIME2     NULL,
+    usuario_anulacion          INT           NULL,
+    id_certificacion_sustituye INT           NULL;
+GO
+
+-- Issue 15.3  Inicializar certificaciones existentes como 'Activa'
+-- ------------------------------------------------------------
+UPDATE certificacion_emitida
+SET id_estado = (
+    SELECT id_item FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_CERTIFICACION' AND nombre = 'Activa'
+)
+WHERE id_estado IS NULL;
+GO
+
+-- Issue 15.4  Hacer id_estado obligatorio + agregar constraints
+-- ------------------------------------------------------------
+ALTER TABLE certificacion_emitida
+ALTER COLUMN id_estado INT NOT NULL;
+GO
+
+ALTER TABLE certificacion_emitida
+ADD CONSTRAINT fk_certificacion_estado
+    FOREIGN KEY (id_estado) REFERENCES catalogo_maestro(id_item);
+GO
+
+ALTER TABLE certificacion_emitida
+ADD CONSTRAINT fk_certificacion_sustituye
+    FOREIGN KEY (id_certificacion_sustituye)
+    REFERENCES certificacion_emitida(id_certificacion);
+GO
+
+ALTER TABLE certificacion_emitida
+ADD CONSTRAINT fk_certificacion_usuario_anulacion
+    FOREIGN KEY (usuario_anulacion) REFERENCES sys_usuario(id_usuario);
+GO
+
+-- Issue 15.5 CHECK constraint: coherencia entre estado y campos
+-- NOTA: Usamos IDs literales (37=Activa, 38=Anulada, 39=Sustituida)
+-- porque Azure SQL no permite subconsultas en CHECK constraints.
+-- Estos IDs son fijos porque el UNIQUE (grupo_catalogo, nombre)
+-- garantiza que no se dupliquen.
+ALTER TABLE certificacion_emitida
+ADD CONSTRAINT ck_anulacion_coherente
+    CHECK (
+        (
+            id_estado = 37  -- Activa
+            AND motivo_anulacion IS NULL
+            AND fecha_anulacion IS NULL
+            AND usuario_anulacion IS NULL
+        )
+        OR
+        (
+            id_estado IN (38, 39)  -- Anulada o Sustituida
+            AND motivo_anulacion IS NOT NULL
+            AND fecha_anulacion IS NOT NULL
+            AND usuario_anulacion IS NOT NULL
+        )
+    );
+GO
+
+-- Issue 15.6  STORED PROCEDURE: Anular certificaci贸n
+-- ------------------------------------------------------------
+-- Cambia el estado a 'Anulada'. NO reutiliza el folio.
+-- Lanza error si la certificaci贸n ya est谩 anulada o sustituida.
+CREATE OR ALTER PROCEDURE sp_anular_certificacion
+    @folio_unico       NVARCHAR(30),
+    @motivo            NVARCHAR(500),
+    @usuario_anulacion INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @id_certificacion INT;
+    DECLARE @id_estado_actual INT;
+    DECLARE @id_estado_activa INT;
+    DECLARE @id_estado_anulada INT;
+
+    -- Obtener IDs de estados
+    SELECT @id_estado_activa = id_item
+    FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_CERTIFICACION' AND nombre = 'Activa';
+
+    SELECT @id_estado_anulada = id_item
+    FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_CERTIFICACION' AND nombre = 'Anulada';
+
+    -- Buscar la certificaci贸n
+    SELECT
+        @id_certificacion = id_certificacion,
+        @id_estado_actual = id_estado
+    FROM certificacion_emitida
+    WHERE folio_unico = @folio_unico;
+
+    -- Validaciones
+    IF @id_certificacion IS NULL
+    BEGIN
+        RAISERROR('No existe una certificaci贸n con el folio %s.', 16, 1, @folio_unico);
+        RETURN;
+    END;
+
+    IF @id_estado_actual <> @id_estado_activa
+    BEGIN
+        RAISERROR('Solo se pueden anular certificaciones en estado Activa. Folio: %s', 16, 1, @folio_unico);
+        RETURN;
+    END;
+
+    IF LTRIM(RTRIM(ISNULL(@motivo, ''))) = ''
+    BEGIN
+        RAISERROR('El motivo de anulaci贸n es obligatorio.', 16, 1);
+        RETURN;
+    END;
+
+    -- Ejecutar anulaci贸n
+    UPDATE certificacion_emitida
+    SET
+        id_estado         = @id_estado_anulada,
+        motivo_anulacion  = @motivo,
+        fecha_anulacion   = SYSUTCDATETIME(),
+        usuario_anulacion = @usuario_anulacion
+    WHERE id_certificacion = @id_certificacion;
+
+    PRINT 'Certificaci贸n ' + @folio_unico + ' anulada correctamente.';
+END;
+GO
+
+
+-- Issue 15.7  STORED PROCEDURE: Emitir certificaci贸n de sustituci贸n
+-- ------------------------------------------------------------
+-- Marca la certificaci贸n anterior como 'Sustituida' y crea
+-- una nueva que apunta a la original con id_certificacion_sustituye.
+-- El nuevo folio lo genera la l贸gica del Issue #1 (foliado).
+CREATE OR ALTER PROCEDURE sp_emitir_sustitucion
+    @folio_anterior        NVARCHAR(30),
+    @motivo                NVARCHAR(500),
+    @usuario_secretaria    INT,
+    @nuevo_folio           NVARCHAR(30) OUTPUT,
+    @nuevo_id_certificacion INT         OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @id_cert_anterior INT;
+    DECLARE @id_asambleista   INT;
+    DECLARE @hash_anterior    NVARCHAR(80);
+    DECLARE @id_estado_activa INT;
+    DECLARE @id_estado_sustituida INT;
+
+    SELECT @id_estado_activa = id_item
+    FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_CERTIFICACION' AND nombre = 'Activa';
+
+    SELECT @id_estado_sustituida = id_item
+    FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_CERTIFICACION' AND nombre = 'Sustituida';
+
+    -- Buscar certificaci贸n anterior
+    SELECT
+        @id_cert_anterior = id_certificacion,
+        @id_asambleista   = id_asambleista,
+        @hash_anterior    = hash_seguridad
+    FROM certificacion_emitida
+    WHERE folio_unico = @folio_anterior;
+
+    IF @id_cert_anterior IS NULL
+    BEGIN
+        RAISERROR('No existe una certificaci贸n con el folio %s.', 16, 1, @folio_anterior);
+        RETURN;
+    END;
+
+    -- La anterior debe estar Activa para poder sustituirla
+    IF NOT EXISTS (
+        SELECT 1 FROM certificacion_emitida
+        WHERE id_certificacion = @id_cert_anterior AND id_estado = @id_estado_activa
+    )
+    BEGIN
+        RAISERROR('Solo se pueden sustituir certificaciones en estado Activa.', 16, 1);
+        RETURN;
+    END;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- Paso 1: Marcar la anterior como 'Sustituida'
+        UPDATE certificacion_emitida
+        SET
+            id_estado         = @id_estado_sustituida,
+            motivo_anulacion  = @motivo,
+            fecha_anulacion   = SYSUTCDATETIME(),
+            usuario_anulacion = @usuario_secretaria
+        WHERE id_certificacion = @id_cert_anterior;
+
+        -- Paso 2: Crear la nueva certificaci贸n (folio nuevo del Issue #1)
+        -- NOTA: el folio definitivo lo asigna el SP del Issue #1.
+        --       Aqu铆 solo dejamos el placeholder; el motor de PDF
+        --       (Arash, Issue #17) llamar谩 al SP de foliado y luego
+        --       har谩 UPDATE para registrar el hash final.
+        INSERT INTO certificacion_emitida (
+            id_asambleista,
+            folio_unico,
+            hash_seguridad,
+            usuario_secretaria,
+            id_estado,
+            id_certificacion_sustituye
+        )
+        VALUES (
+            @id_asambleista,
+            'PENDIENTE',  -- el SP de foliado del Issue #1 lo actualiza
+            NULL,         -- el hash lo calcula el Issue #13
+            @usuario_secretaria,
+            @id_estado_activa,
+            @id_cert_anterior
+        );
+
+        SET @nuevo_id_certificacion = SCOPE_IDENTITY();
+        SET @nuevo_folio = 'PENDIENTE';
+
+        COMMIT TRANSACTION;
+
+        PRINT 'Sustituci贸n registrada. Folio anterior: ' + @folio_anterior;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
 
 /* 7. TRIGGERS
    Nota general de migracion PostgreSQL -> T-SQL:
@@ -552,6 +808,48 @@ BEGIN
 END;
 GO
 
+
+-- Issue 15  TRIGGER: tg_no_repudio_cert (no repudio)
+-- ------------------------------------------------------------
+-- Bloquea cualquier intento de UPDATE sobre folio_unico,
+-- hash_seguridad, id_asambleista o fecha_emision en certificaciones
+-- ya emitidas. Los campos de anulaci贸n S脥 se pueden modificar.
+-- Tambi茅n bloquea DELETE de certificaciones (fe p煤blica inalterable).
+CREATE OR ALTER TRIGGER tg_no_repudio_cert
+ON certificacion_emitida
+AFTER UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Bloquear DELETE (las certificaciones nunca se borran, solo se anulan)
+    IF EXISTS (SELECT 1 FROM deleted) AND NOT EXISTS (SELECT 1 FROM inserted)
+    BEGIN
+        RAISERROR('No se permite eliminar certificaciones emitidas. Utilice sp_anular_certificacion.', 16, 1);
+        ROLLBACK TRANSACTION;
+        RETURN;
+    END;
+
+    -- Bloquear UPDATE de campos inmutables (no repudio del Art. 301 LGAP)
+    IF UPDATE(folio_unico) OR UPDATE(hash_seguridad)
+       OR UPDATE(id_asambleista) OR UPDATE(fecha_emision)
+    BEGIN
+        -- Excepci贸n: permitir cuando el folio anterior era 'PENDIENTE'
+        -- (caso de sustituci贸n que a煤n no tiene folio asignado por el #1)
+        IF NOT EXISTS (
+            SELECT 1
+            FROM deleted d
+            INNER JOIN inserted i ON d.id_certificacion = i.id_certificacion
+            WHERE d.folio_unico = 'PENDIENTE' AND i.folio_unico <> 'PENDIENTE'
+        )
+        BEGIN
+            RAISERROR('Los campos folio_unico, hash_seguridad, id_asambleista y fecha_emision son inmutables despu茅s de la emisi贸n.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+    END;
+END;
+GO
 
 --8. DATOS SEMILLA
 
@@ -859,6 +1157,184 @@ INSERT INTO nombramiento (id_asambleista, id_sector, id_puesto, fecha_inicio, fe
     (@id_a5, @sector_docente, @puesto_asamb, '2024-01-15', NULL,         'Vigente',  @id_admin_user);
 GO
 
+
 --FIN DEL SCRIPT proyecto-air.sql 
 PRINT 'proyecto-air.sql ejecutado correctamente.';
 GO
+
+
+
+-- ============================================================
+-- ISSUE #11: CONTROL DE QU覴UM
+-- Autor: Frank
+-- Sprint: 3
+-- Descripci髇: Registro de sesiones de la AIR con asistencia
+-- por asamble韘ta y validaci髇 del qu髍um legal m韓imo.
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- 11.1  Estados de asistencia en catalogo_maestro
+-- ------------------------------------------------------------
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_ASISTENCIA'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('ESTADO_ASISTENCIA', 'Presente',    1),
+        ('ESTADO_ASISTENCIA', 'Ausente',     1),
+        ('ESTADO_ASISTENCIA', 'Justificado', 1);
+END;
+GO
+
+-- ------------------------------------------------------------
+-- 11.2  Tipos de sesi髇 en catalogo_maestro
+-- ------------------------------------------------------------
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'TIPO_SESION'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('TIPO_SESION', 'Ordinaria',     1),
+        ('TIPO_SESION', 'Extraordinaria',1);
+END;
+GO
+
+-- ------------------------------------------------------------
+-- 11.3  Tabla: sesion
+-- ------------------------------------------------------------
+CREATE TABLE sesion (
+    id_sesion         INT IDENTITY(1,1) PRIMARY KEY,
+    numero_sesion     NVARCHAR(30)  NOT NULL,
+    fecha_sesion      DATETIME2     NOT NULL,
+    id_tipo_sesion    INT           NOT NULL,
+    quorum_requerido  INT           NOT NULL,
+    total_convocados  INT           NOT NULL,
+    cerrada           BIT           NOT NULL DEFAULT 0,
+    fecha_creacion    DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT uq_sesion_numero UNIQUE (numero_sesion),
+    CONSTRAINT fk_sesion_tipo
+        FOREIGN KEY (id_tipo_sesion) REFERENCES catalogo_maestro(id_item),
+    CONSTRAINT ck_quorum_valido
+        CHECK (quorum_requerido > 0 AND quorum_requerido <= total_convocados)
+);
+GO
+
+-- ------------------------------------------------------------
+-- 11.4  Tabla: asistencia_sesion_plenaria
+-- ------------------------------------------------------------
+CREATE TABLE asistencia_sesion_plenaria (
+    id_asistencia       INT IDENTITY(1,1) PRIMARY KEY,
+    id_sesion           INT NOT NULL,
+    id_asambleista      INT NOT NULL,
+    id_estado_asistencia INT NOT NULL,
+    fecha_registro      DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT uq_asistencia_sesion_asambleista UNIQUE (id_sesion, id_asambleista),
+    CONSTRAINT fk_asistencia_sesion
+        FOREIGN KEY (id_sesion) REFERENCES sesion(id_sesion),
+    CONSTRAINT fk_asistencia_asambleista
+        FOREIGN KEY (id_asambleista) REFERENCES asambleista(id_asambleista),
+    CONSTRAINT fk_asistencia_estado
+        FOREIGN KEY (id_estado_asistencia) REFERENCES catalogo_maestro(id_item)
+);
+GO
+
+-- ------------------------------------------------------------
+-- 11.5  蚽dices para queries de qu髍um y reportes
+-- ------------------------------------------------------------
+CREATE INDEX idx_asistencia_sesion ON asistencia_sesion_plenaria(id_sesion);
+CREATE INDEX idx_asistencia_asambleista ON asistencia_sesion_plenaria(id_asambleista);
+GO
+
+-- ============================================================
+-- FIN ISSUE #11
+-- ============================================================
+
+
+-- ISSUE #13: BIT鈹碈ORA DE AUDITOR鈺怉 Y TRAZABILIDAD DE EMISIONES
+-- Autor: Frank
+-- Sprint: 3
+-- Descripci鈮: Tabla de log especializada para certificaciones
+-- emitidas con hash SHA-256 (no repudio Art. 301 LGAP) y
+-- registro de accesos sensibles a datos de asambleistas.
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- 13.1  Tipos de acci鈮 en catalogo_maestro
+-- ------------------------------------------------------------
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ACCION_LOG_CERT'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('ACCION_LOG_CERT', 'EMISION',     1),
+        ('ACCION_LOG_CERT', 'REIMPRESION', 1),
+        ('ACCION_LOG_CERT', 'ANULACION',   1),
+        ('ACCION_LOG_CERT', 'SUSTITUCION', 1),
+        ('ACCION_LOG_CERT', 'CONSULTA',    1);
+END;
+GO
+
+-- ------------------------------------------------------------
+-- 13.2  Tabla: log_certificacion_emitida
+-- ------------------------------------------------------------
+-- Bitacora especializada de operaciones sobre certificaciones.
+-- Inmutable: solo INSERT, jamas UPDATE/DELETE.
+-- snapshot_json guarda el estado completo de la certificacion
+-- al momento de la emision para evitar que cambios futuros
+-- en la BD alteren lo ya emitido.
+CREATE TABLE log_certificacion_emitida (
+    id_log             INT IDENTITY(1,1) PRIMARY KEY,
+    id_certificacion   INT NOT NULL,
+    folio_unico        NVARCHAR(30) NOT NULL,
+    id_accion          INT NOT NULL,
+    id_usuario         INT NOT NULL,
+    fecha_evento       DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    ip_origen          NVARCHAR(45) NULL,
+    hash_documento     NVARCHAR(80) NULL,
+    snapshot_json      NVARCHAR(MAX) NULL,
+    observacion        NVARCHAR(500) NULL,
+    CONSTRAINT fk_log_cert_certificacion
+        FOREIGN KEY (id_certificacion) REFERENCES certificacion_emitida(id_certificacion),
+    CONSTRAINT fk_log_cert_accion
+        FOREIGN KEY (id_accion) REFERENCES catalogo_maestro(id_item),
+    CONSTRAINT fk_log_cert_usuario
+        FOREIGN KEY (id_usuario) REFERENCES sys_usuario(id_usuario)
+);
+GO
+
+-- ------------------------------------------------------------
+-- 13.3  Tabla: seguridad_log
+-- ------------------------------------------------------------
+-- Log de accesos sensibles (consultas a datos de asambleistas
+-- que NO terminan en emision). Cumple criterio del Issue #13:
+-- "Registrar cualquier intento de consulta a datos de
+-- asambleistas que no termine en una certificacion emitida."
+CREATE TABLE seguridad_log (
+    id_seguridad_log INT IDENTITY(1,1) PRIMARY KEY,
+    id_usuario       INT NOT NULL,
+    accion           NVARCHAR(80) NOT NULL,
+    tabla_consultada NVARCHAR(80) NULL,
+    registro_id      INT NULL,
+    ip_origen        NVARCHAR(45) NULL,
+    fecha_evento     DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    detalle          NVARCHAR(500) NULL,
+    CONSTRAINT fk_seguridad_log_usuario
+        FOREIGN KEY (id_usuario) REFERENCES sys_usuario(id_usuario)
+);
+GO
+
+-- ------------------------------------------------------------
+-- 13.4  鈺恘dices para queries de auditoria
+-- ------------------------------------------------------------
+CREATE INDEX idx_log_cert_certificacion ON log_certificacion_emitida(id_certificacion);
+CREATE INDEX idx_log_cert_folio ON log_certificacion_emitida(folio_unico);
+CREATE INDEX idx_log_cert_fecha ON log_certificacion_emitida(fecha_evento);
+CREATE INDEX idx_seguridad_log_usuario ON seguridad_log(id_usuario);
+CREATE INDEX idx_seguridad_log_fecha ON seguridad_log(fecha_evento);
+GO
+
+-- ============================================================
+-- FIN ISSUE #13
