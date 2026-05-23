@@ -862,3 +862,92 @@ GO
 --FIN DEL SCRIPT proyecto-air.sql 
 PRINT 'proyecto-air.sql ejecutado correctamente.';
 GO
+
+
+
+-- ============================================================
+-- ISSUE #11: CONTROL DE QUÓRUM
+-- Autor: Frank
+-- Sprint: 3
+-- Descripción: Registro de sesiones de la AIR con asistencia
+-- por asambleísta y validación del quórum legal mínimo.
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- 11.1  Estados de asistencia en catalogo_maestro
+-- ------------------------------------------------------------
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_ASISTENCIA'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('ESTADO_ASISTENCIA', 'Presente',    1),
+        ('ESTADO_ASISTENCIA', 'Ausente',     1),
+        ('ESTADO_ASISTENCIA', 'Justificado', 1);
+END;
+GO
+
+-- ------------------------------------------------------------
+-- 11.2  Tipos de sesión en catalogo_maestro
+-- ------------------------------------------------------------
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'TIPO_SESION'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('TIPO_SESION', 'Ordinaria',     1),
+        ('TIPO_SESION', 'Extraordinaria',1);
+END;
+GO
+
+-- ------------------------------------------------------------
+-- 11.3  Tabla: sesion
+-- ------------------------------------------------------------
+CREATE TABLE sesion (
+    id_sesion         INT IDENTITY(1,1) PRIMARY KEY,
+    numero_sesion     NVARCHAR(30)  NOT NULL,
+    fecha_sesion      DATETIME2     NOT NULL,
+    id_tipo_sesion    INT           NOT NULL,
+    quorum_requerido  INT           NOT NULL,
+    total_convocados  INT           NOT NULL,
+    cerrada           BIT           NOT NULL DEFAULT 0,
+    fecha_creacion    DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT uq_sesion_numero UNIQUE (numero_sesion),
+    CONSTRAINT fk_sesion_tipo
+        FOREIGN KEY (id_tipo_sesion) REFERENCES catalogo_maestro(id_item),
+    CONSTRAINT ck_quorum_valido
+        CHECK (quorum_requerido > 0 AND quorum_requerido <= total_convocados)
+);
+GO
+
+-- ------------------------------------------------------------
+-- 11.4  Tabla: asistencia_sesion_plenaria
+-- ------------------------------------------------------------
+CREATE TABLE asistencia_sesion_plenaria (
+    id_asistencia       INT IDENTITY(1,1) PRIMARY KEY,
+    id_sesion           INT NOT NULL,
+    id_asambleista      INT NOT NULL,
+    id_estado_asistencia INT NOT NULL,
+    fecha_registro      DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT uq_asistencia_sesion_asambleista UNIQUE (id_sesion, id_asambleista),
+    CONSTRAINT fk_asistencia_sesion
+        FOREIGN KEY (id_sesion) REFERENCES sesion(id_sesion),
+    CONSTRAINT fk_asistencia_asambleista
+        FOREIGN KEY (id_asambleista) REFERENCES asambleista(id_asambleista),
+    CONSTRAINT fk_asistencia_estado
+        FOREIGN KEY (id_estado_asistencia) REFERENCES catalogo_maestro(id_item)
+);
+GO
+
+-- ------------------------------------------------------------
+-- 11.5  Índices para queries de quórum y reportes
+-- ------------------------------------------------------------
+CREATE INDEX idx_asistencia_sesion ON asistencia_sesion_plenaria(id_sesion);
+CREATE INDEX idx_asistencia_asambleista ON asistencia_sesion_plenaria(id_asambleista);
+GO
+
+-- ============================================================
+-- FIN ISSUE #11
+-- ============================================================
