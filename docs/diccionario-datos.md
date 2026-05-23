@@ -263,3 +263,109 @@ Trigger encargado de generar automáticamente folios consecutivos institucionale
 - Controla concurrencia mediante bloqueo.
 - Mantiene consecutivos por año.
 - Garantiza integridad de foliado.
+
+# 6. Módulo de Sesiones, Propuestas y Resoluciones
+## Tabla: sesiones
+
+| Campo | Tipo | Restricción | Descripción |
+| id_sesion | INT IDENTITY | PK | Identificador de la sesión |
+| numero_sesion | NVARCHAR(20) | NOT NULL, UNIQUE | Número oficial (ej. AIR-110-2024) |
+| fecha | DATE | NOT NULL | Fecha de realización |
+| id_tipo_sesion | INT | NOT NULL, FK | Tipo de sesión |
+| id_tipo_modalidad | INT | NOT NULL, FK | Modalidad |
+| quorum_requerido | INT | NOT NULL, DEFAULT 0, CHECK ≥ 0 | Quórum mínimo legal |
+| link_acta | NVARCHAR(500) | NULL | URL del acta digital |
+
+## Tabla: acta
+
+| Campo | Tipo | Restricción | Descripción |
+| id_acta | INT IDENTITY | PK | Identificador del acta |
+| id_sesion | INT | NOT NULL, UNIQUE, FK | Sesión asociada |
+| fecha_aprobacion | DATE | NULL | Fecha de aprobación |
+| url_documento | NVARCHAR(500) | NULL | Documento PDF |
+| observaciones | NVARCHAR(MAX) | NULL | Observaciones |
+
+## Tabla: propuesta
+
+| Campo | Tipo | Restricción | Descripción |
+| id_propuesta | INT IDENTITY | PK | Identificador de la propuesta |
+| codigo_air | NVARCHAR(30) | NOT NULL, UNIQUE | Código oficial |
+| titulo | NVARCHAR(300) | NOT NULL | Título |
+| texto_sustitutivo | NVARCHAR(MAX) | NULL | Texto propuesto |
+| id_reglamento_base | INT | FK | Reglamento asociado |
+| id_propuesta_padre | INT | FK | Propuesta base (recursiva) |
+| id_etapa_propuesta | INT | NOT NULL, FK | Etapa |
+| id_estado_propuesta | INT | NOT NULL, FK | Estado |
+| id_tipo_mayoria_requerida | INT | NOT NULL, FK | Tipo de mayoría |
+| link_documentacion | NVARCHAR(500) | NULL | Documentación |
+| fecha_registro | DATETIME2 | DEFAULT SYSUTCDATETIME() | Fecha de registro |
+
+## Tabla: proponente_propuesta
+
+| Campo | Tipo | Restricción | Descripción |
+| id_proponente_propuesta | INT IDENTITY | PK | Identificador |
+| id_propuesta | INT | NOT NULL, FK | Propuesta |
+| id_asambleista | INT | NOT NULL, FK | Asambleísta |
+| fecha_registro | DATETIME2 | DEFAULT SYSUTCDATETIME() | Fecha |
+
+Restricción UNIQUE sobre (id_propuesta, id_asambleista)
+
+## Tabla: bitacora_propuesta
+
+| Campo | Tipo | Restricción | Descripción |
+| id_registro_bitacora | INT IDENTITY | PK | Identificador |
+| id_propuesta | INT | NOT NULL, FK | Propuesta |
+| id_reglamento_base | INT | FK | Reglamento |
+| id_etapa_propuesta | INT | NOT NULL, FK | Etapa |
+| id_estado_propuesta | INT | NOT NULL, FK | Estado |
+| titulo | NVARCHAR(300) | NOT NULL | Título |
+| codigo_air | NVARCHAR(30) | NOT NULL | Código |
+| fecha_modificacion | DATETIME2 | DEFAULT SYSUTCDATETIME() | Fecha |
+| usuario_modificacion | INT | FK | Usuario |
+
+## Tabla: punto_agenda
+
+| Campo | Tipo | Restricción | Descripción |
+| id_punto_agenda | INT IDENTITY | PK | Identificador |
+| id_sesion | INT | NOT NULL, FK | Sesión |
+| id_propuesta | INT | NOT NULL, FK | Propuesta |
+| orden | INT | NOT NULL | Orden |
+| descripcion | NVARCHAR(500) | NULL | Descripción |
+
+Restricción UNIQUE sobre (id_sesion, id_propuesta)
+Restricción UNIQUE sobre (id_sesion, orden)
+
+## Tabla: resolucion
+
+| Campo | Tipo | Restricción | Descripción |
+| id_resolucion | INT IDENTITY | PK | Identificador |
+| id_punto_agenda | INT | NOT NULL, UNIQUE, FK | Punto de agenda |
+| numero_resolucion | NVARCHAR(30) | NOT NULL, UNIQUE | Número oficial |
+| fecha_emision | DATETIME2 | DEFAULT SYSUTCDATETIME() | Fecha |
+
+## Tabla: reforma_aplicada
+
+| Campo | Tipo | Restricción | Descripción |
+| id_reforma | INT IDENTITY | PK | Identificador |
+| id_resolucion | INT | NOT NULL, FK | Resolución |
+| id_elemento_normativo | INT | NOT NULL, FK | Elemento afectado |
+| id_tipo_reforma | INT | NOT NULL, FK | Tipo de reforma |
+| texto_anterior | NVARCHAR(MAX) | NULL | Texto anterior |
+| texto_nuevo | NVARCHAR(MAX) | NULL | Texto nuevo |
+| fecha_inicio_vigencia | DATE | DEFAULT CAST(SYSUTCDATETIME() AS DATE) | Vigencia |
+
+## Tabla: asistencia_sesion_plenaria
+
+| Campo | Tipo | Restricción | Descripción |
+| id_asistencia | INT IDENTITY | PK | Identificador |
+| id_sesion | INT | NOT NULL, FK | Sesión |
+| id_asambleista | INT | NOT NULL, FK | Asambleísta |
+| id_estado_asistencia | INT | NOT NULL, FK | Estado |
+
+Restricción UNIQUE sobre (id_sesion, id_asambleista)
+
+Restricciones FK activadas en Sprint 3
+
+| Tabla | Columna | FK | Referencia |
+| nombramiento | resolucion_id | fk_nombramiento_resolucion | resolucion(id_resolucion) |
+| elemento_normativo | id_acuerdo_origen | fk_elemento_acuerdo_origen | resolucion(id_resolucion) |
