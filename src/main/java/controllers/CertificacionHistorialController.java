@@ -57,11 +57,13 @@ public class CertificacionHistorialController extends HttpServlet {
             "SELECT ce.id_certificacion, ce.folio_unico, " +
             "       a.nombre AS nombre_asambleista, a.cedula, " +
             "       CONVERT(VARCHAR, ce.fecha_emision, 103) AS fecha_emision_fmt, " +
-            "       ce.usuario_secretaria, " +
-            "       ISNULL(ce.estado, 'Activo') AS estado, " +
-            "       ce.motivo_anulacion " +
+            "       ISNULL(u.username, 'N/D') AS usuario_secretaria, " +
+            "       ISNULL(ce.hash_seguridad, '') AS hash_seguridad, " +
+            "       'Activo' AS estado, " +
+            "       NULL AS motivo_anulacion " +
             "FROM certificacion_emitida ce " +
-            "JOIN asambleista a ON a.asambleista_id = ce.id_asambleista " +
+            "JOIN asambleista a ON a.id_asambleista = ce.id_asambleista " +
+            "LEFT JOIN sys_usuario u ON u.id_usuario = ce.usuario_secretaria " +
             "WHERE 1=1 "
         );
 
