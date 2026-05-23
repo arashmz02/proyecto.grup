@@ -1250,3 +1250,91 @@ GO
 -- ============================================================
 -- FIN ISSUE #11
 -- ============================================================
+
+
+-- ISSUE #13: BIT┴CORA DE AUDITOR═A Y TRAZABILIDAD DE EMISIONES
+-- Autor: Frank
+-- Sprint: 3
+-- Descripci≤n: Tabla de log especializada para certificaciones
+-- emitidas con hash SHA-256 (no repudio Art. 301 LGAP) y
+-- registro de accesos sensibles a datos de asambleistas.
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- 13.1  Tipos de acci≤n en catalogo_maestro
+-- ------------------------------------------------------------
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ACCION_LOG_CERT'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('ACCION_LOG_CERT', 'EMISION',     1),
+        ('ACCION_LOG_CERT', 'REIMPRESION', 1),
+        ('ACCION_LOG_CERT', 'ANULACION',   1),
+        ('ACCION_LOG_CERT', 'SUSTITUCION', 1),
+        ('ACCION_LOG_CERT', 'CONSULTA',    1);
+END;
+GO
+
+-- ------------------------------------------------------------
+-- 13.2  Tabla: log_certificacion_emitida
+-- ------------------------------------------------------------
+-- Bitacora especializada de operaciones sobre certificaciones.
+-- Inmutable: solo INSERT, jamas UPDATE/DELETE.
+-- snapshot_json guarda el estado completo de la certificacion
+-- al momento de la emision para evitar que cambios futuros
+-- en la BD alteren lo ya emitido.
+CREATE TABLE log_certificacion_emitida (
+    id_log             INT IDENTITY(1,1) PRIMARY KEY,
+    id_certificacion   INT NOT NULL,
+    folio_unico        NVARCHAR(30) NOT NULL,
+    id_accion          INT NOT NULL,
+    id_usuario         INT NOT NULL,
+    fecha_evento       DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    ip_origen          NVARCHAR(45) NULL,
+    hash_documento     NVARCHAR(80) NULL,
+    snapshot_json      NVARCHAR(MAX) NULL,
+    observacion        NVARCHAR(500) NULL,
+    CONSTRAINT fk_log_cert_certificacion
+        FOREIGN KEY (id_certificacion) REFERENCES certificacion_emitida(id_certificacion),
+    CONSTRAINT fk_log_cert_accion
+        FOREIGN KEY (id_accion) REFERENCES catalogo_maestro(id_item),
+    CONSTRAINT fk_log_cert_usuario
+        FOREIGN KEY (id_usuario) REFERENCES sys_usuario(id_usuario)
+);
+GO
+
+-- ------------------------------------------------------------
+-- 13.3  Tabla: seguridad_log
+-- ------------------------------------------------------------
+-- Log de accesos sensibles (consultas a datos de asambleistas
+-- que NO terminan en emision). Cumple criterio del Issue #13:
+-- "Registrar cualquier intento de consulta a datos de
+-- asambleistas que no termine en una certificacion emitida."
+CREATE TABLE seguridad_log (
+    id_seguridad_log INT IDENTITY(1,1) PRIMARY KEY,
+    id_usuario       INT NOT NULL,
+    accion           NVARCHAR(80) NOT NULL,
+    tabla_consultada NVARCHAR(80) NULL,
+    registro_id      INT NULL,
+    ip_origen        NVARCHAR(45) NULL,
+    fecha_evento     DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    detalle          NVARCHAR(500) NULL,
+    CONSTRAINT fk_seguridad_log_usuario
+        FOREIGN KEY (id_usuario) REFERENCES sys_usuario(id_usuario)
+);
+GO
+
+-- ------------------------------------------------------------
+-- 13.4  ═ndices para queries de auditoria
+-- ------------------------------------------------------------
+CREATE INDEX idx_log_cert_certificacion ON log_certificacion_emitida(id_certificacion);
+CREATE INDEX idx_log_cert_folio ON log_certificacion_emitida(folio_unico);
+CREATE INDEX idx_log_cert_fecha ON log_certificacion_emitida(fecha_evento);
+CREATE INDEX idx_seguridad_log_usuario ON seguridad_log(id_usuario);
+CREATE INDEX idx_seguridad_log_fecha ON seguridad_log(fecha_evento);
+GO
+
+-- ============================================================
+-- FIN ISSUE #13
