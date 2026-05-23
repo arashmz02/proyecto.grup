@@ -75,5 +75,12 @@
         </plugins>
     </build>
 
+    <!--Apache POI: exportación a Excel (.xlsx) — Issue #16 Josué -->
+<dependency>
+    <groupId>org.apache.poi</groupId>
+    <artifactId>poi-ooxml</artifactId>
+    <version>5.2.5</version>
+</dependency>
+
 </project>
 
