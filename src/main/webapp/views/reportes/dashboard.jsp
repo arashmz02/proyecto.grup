@@ -129,7 +129,7 @@
 
 </div>
 
-<script src="${pageContext.request.contextPath}/resources/js/autocomplete.js">
+<script src="${pageContext.request.contextPath}/resources/js/autocomplete-dashboard.js">
 </script>
 <script src="${pageContext.request.contextPath}/resources/js/charts.js"></script>
 <script>
