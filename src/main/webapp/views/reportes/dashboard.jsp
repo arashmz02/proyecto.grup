@@ -4,7 +4,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>AIR — Dashboard Administrativo</title>
+    <title>AIR - Dashboard Administrativo</title>
     <link rel="stylesheet"
           href="${pageContext.request.contextPath}/resources/css/certificacion.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js">
@@ -14,7 +14,7 @@
 
 <nav style="background:#003d7a;padding:12px 28px;color:#fff;
             font-weight:bold;font-size:1.1rem;">
-    AIR — Dashboard Administrativo
+    AIR - Dashboard Administrativo
     <span style="float:right;font-weight:normal;font-size:0.9rem;">
         <c:out value="${sessionScope.usuarioNombre}" default="Usuario"/>
     </span>
@@ -34,13 +34,13 @@
     <div class="metricas-row">
         <div class="metrica-card">
             <div class="numero">
-                <c:out value="${totalCertificaciones}" default="—"/>
+                <c:out value="${totalCertificaciones}" default="-"/>
             </div>
             <div class="etiqueta">Total certificaciones emitidas</div>
         </div>
         <div class="metrica-card">
             <div class="numero">
-                <c:out value="${totalAsambleistas}" default="—"/>
+                <c:out value="${totalAsambleistas}" default="-"/>
             </div>
             <div class="etiqueta">Asambleistas registrados</div>
         </div>
@@ -134,31 +134,24 @@
 <script src="${pageContext.request.contextPath}/resources/js/charts.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        inicializarDashboard('${pageContext.request.contextPath}');
-    });
+        if (typeof inicializarDashboard === 'function') {
+            inicializarDashboard('${pageContext.request.contextPath}');
+        }
 
-    inicializarBuscador({
-        contextPath: '${pageContext.request.contextPath}',
-        inputId: 'inputExport',
-        listaId: 'listaExport',
-        hiddenId: 'exportId',
-        btnConsultarId: 'btnExport',
-        infoCardId: null,
-        infoNombreId: null,
-        infoCedulaId: null,
-        infoSectorId: null,
-        infoFechaInicioId: null,
-        infoEstadoId: null,
-        fechaDesdeId: null,
-        fechaHastaId: null,
-        urlConsultar: '#'
-    });
+        inicializarBuscador({
+            contextPath: '${pageContext.request.contextPath}',
+            inputId: 'inputExport',
+            listaId: 'listaExport',
+            hiddenId: 'exportId',
+            btnConsultarId: 'btnExport'
+        });
 
-    document.getElementById('btnExport').addEventListener('click', function () {
-        const id = document.getElementById('exportId').value;
-        if (!id) { alert('Seleccione un asambleista primero.'); return; }
-        window.location.href = '${pageContext.request.contextPath}' +
-            '/api/export/asambleista?asambleistaId=' + encodeURIComponent(id);
+        document.getElementById('btnExport').addEventListener('click', function () {
+            const id = document.getElementById('exportId').value;
+            if (!id) { alert('Seleccione un asambleista primero.'); return; }
+            window.location.href = '${pageContext.request.contextPath}' +
+                '/api/export/asambleista?asambleistaId=' + encodeURIComponent(id);
+        });
     });
 </script>
 

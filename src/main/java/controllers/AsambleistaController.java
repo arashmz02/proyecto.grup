@@ -1,5 +1,6 @@
 package controllers;
 
+import com.google.gson.Gson;
 import config.Conexion;
 import models.Asambleista;
 
@@ -11,6 +12,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -18,35 +20,20 @@ import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 
-/**
- * Controlador del modulo de asambleistas (Issue #9).
- *
- * Rutas:
- *   GET  /asambleistas            -> lista de asambleistas
- *   GET  /asambleistas/nuevo      -> formulario de alta
- *   POST /asambleistas/nuevo      -> procesa el alta
- *   GET  /asambleistas/detalle    -> historial de nombramientos
- *
- * Todas las rutas requieren autenticacion. Las acciones de
- * escritura requieren el permiso REGISTRAR_ASAMBLEISTAS.
- *
- * VALIDACIONES (criterios de aceptacion del Issue #9):
- *   - Cedula: formato X-XXXX-XXXX (un digito, guion, cuatro
- *     digitos, guion, cuatro digitos).
- *   - Correo: debe terminar en @itcr.ac.cr o @estudiantec.cr.
- *   - Cedula unica: se rechaza el alta si ya existe.
- */
+/*Controlador del modulo de asambleistas (Issue #9)*/
 @WebServlet(name = "AsambleistaController", urlPatterns = {
     "/asambleistas",
     "/asambleistas/nuevo",
-    "/asambleistas/detalle"
+    "/asambleistas/detalle",
+    "/asambleistas/buscar"
 })
 public class AsambleistaController extends HttpServlet {
 
-    // Patrones de validacion compilados una sola vez (mas eficiente)
     private static final Pattern PATRON_CEDULA =
         Pattern.compile("^[0-9]-[0-9]{4}-[0-9]{4}$");
 
@@ -54,12 +41,10 @@ public class AsambleistaController extends HttpServlet {
         Pattern.compile("^[A-Za-z0-9._%+-]+@(itcr\\.ac\\.cr|estudiantec\\.cr)$");
 
 
-    /*  GET: enrutado por ruta solicitada */
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
 
-        // Todas las rutas exigen sesion activa
         if (!AuthController.middlewareAuth(req, resp)) return;
 
         String ruta = req.getServletPath();
@@ -74,13 +59,15 @@ public class AsambleistaController extends HttpServlet {
             case "/asambleistas/detalle":
                 mostrarDetalle(req, resp);
                 break;
+            case "/asambleistas/buscar":
+                buscarJson(req, resp);
+                break;
             default:
                 resp.sendError(HttpServletResponse.SC_NOT_FOUND);
         }
     }
 
 
-    /* POST: solo /asambleistas/nuevo (alta) */
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
@@ -95,14 +82,12 @@ public class AsambleistaController extends HttpServlet {
     }
 
 
-    /* ACCION: listar asambleistas */
     private void listar(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
 
         try {
             List<Asambleista> asambleistas = Asambleista.listarTodos();
 
-            // Marcar cuales estan vigentes para mostrarlo en la vista
             List<FilaAsambleista> filas = new ArrayList<>();
             for (Asambleista a : asambleistas) {
                 FilaAsambleista f = new FilaAsambleista();
@@ -125,8 +110,6 @@ public class AsambleistaController extends HttpServlet {
     }
 
 
-    /* ACCION: mostrar formulario de alta
-       Requiere permiso REGISTRAR_ASAMBLEISTAS.  */
     private void mostrarFormulario(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
 
@@ -136,7 +119,6 @@ public class AsambleistaController extends HttpServlet {
         }
 
         try {
-            // Cargar sectores y puestos del catalogo_maestro
             req.setAttribute("sectores", cargarOpciones("SECTOR"));
             req.setAttribute("puestos",  cargarOpciones("PUESTO"));
 
@@ -152,7 +134,6 @@ public class AsambleistaController extends HttpServlet {
     }
 
 
-    /* ACCION: procesar alta del formulario */
     private void procesarAlta(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
 
@@ -161,16 +142,14 @@ public class AsambleistaController extends HttpServlet {
             return;
         }
 
-        // ---- 1. Leer parametros ----
         String cedula = trim(req.getParameter("cedula"));
         String nombre = trim(req.getParameter("nombre"));
         String correo = trim(req.getParameter("correo"));
         String idSectorStr     = req.getParameter("idSector");
-        String idPuestoStr     = req.getParameter("idPuesto");   // opcional
+        String idPuestoStr     = req.getParameter("idPuesto");
         String fechaInicioStr  = req.getParameter("fechaInicio");
-        String fechaFinStr     = req.getParameter("fechaFin");   // opcional
+        String fechaFinStr     = req.getParameter("fechaFin");
 
-        // ---- 2. Validaciones ----
         String error = validarCampos(cedula, nombre, correo,
                                      idSectorStr, fechaInicioStr);
         if (error != null) {
@@ -178,7 +157,6 @@ public class AsambleistaController extends HttpServlet {
             return;
         }
 
-        // ---- 3. Parsear y verificar duplicado ----
         try {
             if (Asambleista.obtenerPorCedula(cedula) != null) {
                 volverAlFormularioConError(req, resp,
@@ -200,7 +178,6 @@ public class AsambleistaController extends HttpServlet {
                 return;
             }
 
-            // ---- 4. Crear ----
             HttpSession sesion = req.getSession(false);
             int idUsuario = (Integer) sesion.getAttribute("idUsuario");
 
@@ -208,8 +185,6 @@ public class AsambleistaController extends HttpServlet {
             Asambleista.agregarNombramiento(
                 idAsambleista, idSector, idPuesto, fechaInicio, fechaFin, idUsuario);
 
-            //Redirigir a la lista. El parametro 'creado' permite a
-            //la vista mostrar un toast de exito.
             resp.sendRedirect(req.getContextPath() + "/asambleistas?creado=1");
 
         } catch (DateTimeParseException e) {
@@ -221,8 +196,6 @@ public class AsambleistaController extends HttpServlet {
                 "Los identificadores de sector y puesto deben ser numericos.");
 
         } catch (SQLException e) {
-            //El trigger tg_traslape_sector lanza error 50001 si hay
-            //traslape de fechas. Lo mostramos como mensaje amigable.
             if (e.getErrorCode() == 50001 ||
                 (e.getMessage() != null && e.getMessage().contains("Traslape"))) {
                 volverAlFormularioConError(req, resp,
@@ -236,7 +209,6 @@ public class AsambleistaController extends HttpServlet {
     }
 
 
-    /*  ACCION: detalle (historial de nombramientos) */
     private void mostrarDetalle(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
 
@@ -275,12 +247,43 @@ public class AsambleistaController extends HttpServlet {
     }
 
 
-    /*  HELPERS */
+    /*Endpoint de busqueda para autocomplete del Dashboard (Issue #16).
+     Recibe un parametro 'q' con el texto a buscar y devuelve JSON con los asambleistas que matcheen (max 10).*/
+    private void buscarJson(HttpServletRequest req, HttpServletResponse resp)
+            throws IOException {
 
-    /**
-     * Valida los campos del formulario. Devuelve null si todo OK,
-     * o un mensaje de error apto para mostrar al usuario.
-     */
+        resp.setContentType("application/json");
+        resp.setCharacterEncoding("UTF-8");
+
+        String texto = req.getParameter("q");
+
+        try (PrintWriter out = resp.getWriter()) {
+            List<Asambleista> encontrados = Asambleista.buscarPorTexto(texto);
+
+            // Construimos una lista de mapas para la respuesta JSON.
+            // No exponemos el correo institucional aqui por privacidad.
+            List<Map<String, Object>> respuesta = new ArrayList<>();
+            for (Asambleista a : encontrados) {
+                Map<String, Object> item = new HashMap<>();
+                item.put("id",     a.getIdAsambleista());
+                item.put("nombre", a.getNombre());
+                item.put("cedula", a.getCedula());
+                respuesta.add(item);
+            }
+
+            Gson gson = new Gson();
+            out.print(gson.toJson(respuesta));
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            try (PrintWriter out = resp.getWriter()) {
+                out.print("{\"error\":\"Error al buscar asambleistas.\"}");
+            }
+        }
+    }
+
+
     private String validarCampos(String cedula, String nombre, String correo,
                                  String idSector, String fechaInicio) {
 
@@ -301,14 +304,10 @@ public class AsambleistaController extends HttpServlet {
         if (fechaInicio == null || fechaInicio.isBlank())
             return "La fecha de inicio del nombramiento es obligatoria.";
 
-        return null;   // todo OK
+        return null;
     }
 
 
-    /**
-     * Carga las opciones de un grupo del catalogo_maestro (SECTOR,
-     * PUESTO, etc.) para llenar selects en la vista.
-     */
     private List<OpcionCatalogo> cargarOpciones(String grupo) throws SQLException {
         String sql = "SELECT id_item, nombre FROM catalogo_maestro " +
                      "WHERE grupo_catalogo = ? AND activo = 1 ORDER BY nombre";
@@ -333,11 +332,6 @@ public class AsambleistaController extends HttpServlet {
     }
 
 
-    /**
-     * Reenvia al formulario de alta con un mensaje de error y
-     * preservando los valores que el usuario ya habia escrito,
-     * para que no tenga que reescribir todo.
-     */
     private void volverAlFormularioConError(HttpServletRequest req,
                                             HttpServletResponse resp,
                                             String mensaje)
@@ -345,7 +339,6 @@ public class AsambleistaController extends HttpServlet {
 
         req.setAttribute("error", mensaje);
 
-        // Preservar lo que el usuario escribio
         req.setAttribute("cedulaPrev",      req.getParameter("cedula"));
         req.setAttribute("nombrePrev",      req.getParameter("nombre"));
         req.setAttribute("correoPrev",      req.getParameter("correo"));
@@ -358,8 +351,6 @@ public class AsambleistaController extends HttpServlet {
             req.setAttribute("sectores", cargarOpciones("SECTOR"));
             req.setAttribute("puestos",  cargarOpciones("PUESTO"));
         } catch (SQLException e) {
-            // si no se cargan los catalogos, el error principal ya
-            // esta seteado; no sobreescribimos
         }
 
         req.getRequestDispatcher("/views/asambleistas/asambleista-registro.jsp")
@@ -367,13 +358,11 @@ public class AsambleistaController extends HttpServlet {
     }
 
 
-    /** Trim seguro: devuelve null si el input es null. */
     private static String trim(String s) {
         return s == null ? null : s.trim();
     }
 
 
-    /* DTOs internos (publicos para que las JSP los accedan) */
     public static class FilaAsambleista {
         public Asambleista asambleista;
         public boolean vigente;
