@@ -1,5 +1,5 @@
 package services;
-
+import models.Certificacion;
 public class PDFService {
 
     public String generarContenidoCertificacion(Certificacion certificacion) {
