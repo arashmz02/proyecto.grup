@@ -1,13 +1,11 @@
+
 /* 
    PROYECTO-AIR.SQL
    Sistema de Gestion Legislativa AIR (SGL-AIR)
-   Instituto Tecnologico de Costa Rica - Bases de Datos
-   Sprint 2: Cimientos y Estructura de Datos
-
+   Instituto Tecnologico de Costa Rica
+ 
    Motor: Azure SQL Database (T-SQL)
-   Estrategia: DROP & RECREATE - el script deja la BD en un
-   estado limpio y reproducible en cada ejecucion.
-
+ 
    ORDEN DEL SCRIPT (importante por dependencias de FK):
      1. DROP de objetos (orden inverso a la creacion)
      2. Modulo de Seguridad y Roles        (Frank  - Issue #0)
@@ -15,13 +13,18 @@
      4. Modulo de Identidad y Nombramientos(Frank  - Issue #9)
      5. Modulo de Jerarquia Normativa      (Josue  - Issue #10)
      6. Control de Folios y Certificaciones(Arash  - Issue #1)
+     6.5 Sesiones, Propuestas y Resoluciones (Josue - Issue #10 Parte II)
      7. Triggers
-     8. Datos semilla */
-
-
+     8. Datos semilla
+     9. Issue #11 - Control de Quorum (Frank)
+    10. Issue #13 - Bitacora Certificaciones (Frank)
+    11. Issue #12 - Motor de Votaciones (Frank)
+    12. Issue #15 - Anulaciones y Sustituciones (Arash) */
+ 
+ 
 /* 1. LIMPIEZA - DROP EN ORDEN INVERSO
    Se eliminan primero los objetos que dependen de otros. */
-
+ 
 --Triggers
 IF OBJECT_ID('tg_cambio_identidad', 'TR')      IS NOT NULL DROP TRIGGER tg_cambio_identidad;
 IF OBJECT_ID('tg_folio_secuencial', 'TR')      IS NOT NULL DROP TRIGGER tg_folio_secuencial;
@@ -29,23 +32,15 @@ IF OBJECT_ID('tg_vigencia_normativa', 'TR')    IS NOT NULL DROP TRIGGER tg_vigen
 IF OBJECT_ID('tg_traslape_sector', 'TR')       IS NOT NULL DROP TRIGGER tg_traslape_sector;
 IF OBJECT_ID('tg_auditoria_nombramiento', 'TR')IS NOT NULL DROP TRIGGER tg_auditoria_nombramiento;
 IF OBJECT_ID('tg_auditoria_asambleista', 'TR') IS NOT NULL DROP TRIGGER tg_auditoria_asambleista;
-
+ 
 --Tablas (hijas antes que padres)
-
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'fk_nombramiento_resolucion')
-    ALTER TABLE nombramiento DROP CONSTRAINT fk_nombramiento_resolucion;
-IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'fk_elemento_acuerdo_origen')
-    ALTER TABLE elemento_normativo DROP CONSTRAINT fk_elemento_acuerdo_origen;
-
-IF OBJECT_ID('asistencia_sesion_plenaria', 'U') IS NOT NULL DROP TABLE asistencia_sesion_plenaria;
 IF OBJECT_ID('reforma_aplicada', 'U')           IS NOT NULL DROP TABLE reforma_aplicada;
-IF OBJECT_ID('resolucion', 'U')                 IS NOT NULL DROP TABLE resolucion;
+IF OBJECT_ID('resolucion_propuesta', 'U')       IS NOT NULL DROP TABLE resolucion_propuesta;
 IF OBJECT_ID('punto_agenda', 'U')               IS NOT NULL DROP TABLE punto_agenda;
 IF OBJECT_ID('bitacora_propuesta', 'U')         IS NOT NULL DROP TABLE bitacora_propuesta;
 IF OBJECT_ID('proponente_propuesta', 'U')       IS NOT NULL DROP TABLE proponente_propuesta;
 IF OBJECT_ID('propuesta', 'U')                  IS NOT NULL DROP TABLE propuesta;
 IF OBJECT_ID('acta', 'U')                       IS NOT NULL DROP TABLE acta;
-IF OBJECT_ID('sesiones', 'U')                   IS NOT NULL DROP TABLE sesiones;
 IF OBJECT_ID('certificacion_emitida', 'U')     IS NOT NULL DROP TABLE certificacion_emitida;
 IF OBJECT_ID('control_folio', 'U')             IS NOT NULL DROP TABLE control_folio;
 IF OBJECT_ID('elemento_normativo', 'U')        IS NOT NULL DROP TABLE elemento_normativo;
@@ -63,24 +58,24 @@ IF OBJECT_ID('sys_usuario', 'U')               IS NOT NULL DROP TABLE sys_usuari
 IF OBJECT_ID('sys_permiso', 'U')               IS NOT NULL DROP TABLE sys_permiso;
 IF OBJECT_ID('sys_rol', 'U')                   IS NOT NULL DROP TABLE sys_rol;
 GO
-
-
+ 
+ 
 /* 2. MODULO DE SEGURIDAD Y ROLES (sys_*)
    Responsable: Frank - Issue #0 */
-
+ 
 CREATE TABLE sys_rol (
     id_rol      INT IDENTITY(1,1) PRIMARY KEY,
     nombre_rol  NVARCHAR(50) NOT NULL UNIQUE
 );
 GO
-
+ 
 CREATE TABLE sys_permiso (
     id_permiso      INT IDENTITY(1,1) PRIMARY KEY,
     nombre_permiso  NVARCHAR(80) NOT NULL UNIQUE,
     descripcion     NVARCHAR(200)
 );
 GO
-
+ 
 CREATE TABLE sys_usuario (
     id_usuario     INT IDENTITY(1,1) PRIMARY KEY,
     username       NVARCHAR(50)  NOT NULL UNIQUE,
@@ -89,7 +84,7 @@ CREATE TABLE sys_usuario (
     activo         BIT NOT NULL DEFAULT 1
 );
 GO
-
+ 
 CREATE TABLE sys_usuario_rol (
     id_usuario INT NOT NULL,
     id_rol     INT NOT NULL,
@@ -98,7 +93,7 @@ CREATE TABLE sys_usuario_rol (
     CONSTRAINT fk_usuariorol_rol     FOREIGN KEY (id_rol)     REFERENCES sys_rol(id_rol)
 );
 GO
-
+ 
 CREATE TABLE sys_rol_permiso (
     id_rol     INT NOT NULL,
     id_permiso INT NOT NULL,
@@ -107,7 +102,7 @@ CREATE TABLE sys_rol_permiso (
     CONSTRAINT fk_rolpermiso_permiso FOREIGN KEY (id_permiso) REFERENCES sys_permiso(id_permiso)
 );
 GO
-
+ 
 CREATE TABLE sys_log_auditoria (
     id_log          INT IDENTITY(1,1) PRIMARY KEY,
     id_usuario      INT,
@@ -120,13 +115,11 @@ CREATE TABLE sys_log_auditoria (
     CONSTRAINT fk_logauditoria_usuario FOREIGN KEY (id_usuario) REFERENCES sys_usuario(id_usuario)
 );
 GO
-
-
+ 
+ 
 /* 3. CATALOGO MAESTRO (Universal Lookup Table)
-   Responsable: Arash - Issue #1
-   Se crea antes del modulo de identidad porque 'nombramiento'
-   referencia este catalogo (id_sector, id_puesto). */
-
+   Responsable: Arash - Issue #1 */
+ 
 CREATE TABLE catalogo_maestro (
     id_item        INT IDENTITY(1,1) PRIMARY KEY,
     grupo_catalogo NVARCHAR(40)  NOT NULL,
@@ -135,11 +128,11 @@ CREATE TABLE catalogo_maestro (
     CONSTRAINT uq_catalogo_grupo_nombre UNIQUE (grupo_catalogo, nombre)
 );
 GO
-
-
+ 
+ 
 /* 4. MODULO DE IDENTIDAD Y NOMBRAMIENTOS
    Responsable: Frank - Issue #9 */
-
+ 
 CREATE TABLE asambleista (
     id_asambleista       INT IDENTITY(1,1) PRIMARY KEY,
     cedula               NVARCHAR(20)  NOT NULL UNIQUE,
@@ -147,7 +140,7 @@ CREATE TABLE asambleista (
     correo_institucional NVARCHAR(120) NOT NULL UNIQUE
 );
 GO
-
+ 
 CREATE TABLE bitacora_asambleistas (
     id_bitacora_asambleista INT IDENTITY(1,1) PRIMARY KEY,
     id_asambleista          INT,
@@ -158,13 +151,13 @@ CREATE TABLE bitacora_asambleistas (
     CONSTRAINT fk_bitacora_asambleista FOREIGN KEY (id_asambleista) REFERENCES asambleista(id_asambleista)
 );
 GO
-
+ 
 CREATE TABLE nombramiento (
     id_nombramiento     INT IDENTITY(1,1) PRIMARY KEY,
     id_asambleista      INT NOT NULL,
-    id_sector           INT NOT NULL,   -- FK a catalogo_maestro (grupo 'SECTOR')
-    id_puesto           INT,            -- FK a catalogo_maestro (grupo 'PUESTO')
-    resolucion_id       INT,            -- FK opcional a resolucion (Sprint 3)
+    id_sector           INT NOT NULL,
+    id_puesto           INT,
+    resolucion_id       INT,
     fecha_inicio        DATE NOT NULL,
     fecha_fin           DATE,
     estado              NVARCHAR(20) NOT NULL DEFAULT 'Vigente',
@@ -177,24 +170,24 @@ CREATE TABLE nombramiento (
     CONSTRAINT chk_fechas_nombramiento CHECK (fecha_fin IS NULL OR fecha_fin >= fecha_inicio)
 );
 GO
-
-
+ 
+ 
 /* 5. MODULO DE JERARQUIA NORMATIVA
    Responsable: Josue - Issue #10 */
-
+ 
 CREATE TABLE catalogo_nivel_reglamento (
     id_nivel_reglamento INT IDENTITY(1,1) PRIMARY KEY,
     nombre              NVARCHAR(40) NOT NULL UNIQUE,
     orden               INT NOT NULL
 );
 GO
-
+ 
 CREATE TABLE catalogo_estado_vigencia (
     id_estado_vigencia INT IDENTITY(1,1) PRIMARY KEY,
     nombre             NVARCHAR(20) NOT NULL UNIQUE
 );
 GO
-
+ 
 CREATE TABLE reglamento (
     id_reglamento    INT IDENTITY(1,1) PRIMARY KEY,
     nombre_normativa NVARCHAR(150) NOT NULL,
@@ -202,56 +195,39 @@ CREATE TABLE reglamento (
     emisor           NVARCHAR(10)  CHECK (emisor IN ('AIR', 'CI'))
 );
 GO
-
+ 
 CREATE TABLE elemento_normativo (
     id_elemento           INT IDENTITY(1,1) PRIMARY KEY,
     id_reglamento         INT NOT NULL,
     id_elemento_padre     INT,
     id_nivel_reglamento   INT NOT NULL,
-    numero_etiqueta       NVARCHAR(20)  NOT NULL,   -- ej: '18', 'a)', 'i.'
+    numero_etiqueta       NVARCHAR(20)  NOT NULL,
     contenido_texto       NVARCHAR(MAX) NOT NULL,
     orden                 INT NOT NULL,
     fecha_inicio_vigencia DATE NOT NULL DEFAULT CAST(SYSUTCDATETIME() AS DATE),
     fecha_fin_vigencia    DATE,
     id_estado_vigencia    INT NOT NULL,
-    id_acuerdo_origen     INT,  -- FK opcional a resolucion (Sprint 3)
+    id_acuerdo_origen     INT,
     CONSTRAINT fk_elemento_reglamento FOREIGN KEY (id_reglamento)       REFERENCES reglamento(id_reglamento),
     CONSTRAINT fk_elemento_padre      FOREIGN KEY (id_elemento_padre)   REFERENCES elemento_normativo(id_elemento),
     CONSTRAINT fk_elemento_nivel      FOREIGN KEY (id_nivel_reglamento) REFERENCES catalogo_nivel_reglamento(id_nivel_reglamento),
     CONSTRAINT fk_elemento_estado     FOREIGN KEY (id_estado_vigencia)  REFERENCES catalogo_estado_vigencia(id_estado_vigencia)
 );
 GO
-
-/* REGLA DE ORO: Partial Unique Index (Filtered Index en T-SQL)
-   Garantiza que no existan dos elementos hermanos marcados como
-   'Vigente' con la misma etiqueta dentro del mismo reglamento.
-
-   Nota de migracion PostgreSQL -> T-SQL:
-   - En PostgreSQL se usaba COALESCE(id_elemento_padre, 0) dentro
-     del indice y una subconsulta en el WHERE.
-   - T-SQL NO permite funciones (COALESCE) ni subconsultas en la
-     definicion de un filtered index. Solucion:
-       a) El filtro usa el literal del id de estado 'Vigente'.
-          Como los datos semilla insertan los estados en orden
-          fijo (Vigente=1, Historico=2, Derogado=3), el id 1
-          corresponde a 'Vigente'.
-       b) Para tratar los elementos raiz (id_elemento_padre NULL)
-          como hermanos entre si, se agrega la columna calculada
-          persistida 'padre_norm' que convierte NULL en 0. */
-
+ 
 ALTER TABLE elemento_normativo
     ADD padre_norm AS (ISNULL(id_elemento_padre, 0)) PERSISTED;
 GO
-
+ 
 CREATE UNIQUE INDEX uq_etiqueta_vigente
     ON elemento_normativo (id_reglamento, padre_norm, numero_etiqueta)
-    WHERE id_estado_vigencia = 1;   -- 1 = 'Vigente' (ver datos semilla)
+    WHERE id_estado_vigencia = 1;
 GO
-
-
+ 
+ 
 /* 6. CONTROL DE FOLIOS Y CERTIFICACIONES
    Responsable: Arash - Issue #1 */
-
+ 
 CREATE TABLE control_folio (
     id_control          INT IDENTITY(1,1) PRIMARY KEY,
     anio                INT NOT NULL,
@@ -261,7 +237,7 @@ CREATE TABLE control_folio (
     CONSTRAINT uq_control_anio_prefijo UNIQUE (anio, prefijo)
 );
 GO
-
+ 
 CREATE TABLE certificacion_emitida (
     id_certificacion   INT IDENTITY(1,1) PRIMARY KEY,
     id_asambleista     INT,
@@ -273,44 +249,35 @@ CREATE TABLE certificacion_emitida (
     CONSTRAINT fk_certificacion_usuario     FOREIGN KEY (usuario_secretaria) REFERENCES sys_usuario(id_usuario)
 );
 GO
-
+ 
+ 
 /* 
    6.5 SPRINT 3 - ISSUE #10 PARTE II
    MODULO DE SESIONES, PROPUESTAS Y RESOLUCIONES
    Responsable: Josue 
-   Nota: este modulo APROVECHA el trigger tg_vigencia_normativa del
-   Sprint 2. Cuando un INSERT en elemento_normativo marca una version
-   nueva como 'Vigente', el trigger archiva la anterior como
-   'Historico' automaticamente. No se requieren triggers nuevos.
- */
-
---6.5.1 Sesiones plenarias
-CREATE TABLE sesiones (
-    id_sesion         INT IDENTITY(1,1) PRIMARY KEY,
-    numero_sesion     NVARCHAR(20) NOT NULL UNIQUE,
-    fecha             DATE NOT NULL,
-    id_tipo_sesion    INT NOT NULL,
-    id_tipo_modalidad INT NOT NULL,
-    quorum_requerido  INT NOT NULL DEFAULT 0,
-    link_acta         NVARCHAR(500),
-    CONSTRAINT fk_sesion_tipo      FOREIGN KEY (id_tipo_sesion)    REFERENCES catalogo_maestro(id_item),
-    CONSTRAINT fk_sesion_modalidad FOREIGN KEY (id_tipo_modalidad) REFERENCES catalogo_maestro(id_item),
-    CONSTRAINT chk_quorum_positivo CHECK (quorum_requerido >= 0)
-);
-GO
-
---6.5.2 Actas (1:1 con sesion: UNIQUE en id_sesion garantiza una acta por sesion)
+   
+   NOTAS DE INTEGRACION:
+   - Las tablas 'sesion' y 'asistencia_sesion_plenaria' son creadas por Frank en Issue #11 (mas abajo en este archivo). Las FKde este modulo apuntan a ellas.
+   - La tabla 'resolucion' de Frank (Issue #12) tiene un proposito distinto (resoluciones derivadas de votaciones). Por eso esta tabla se llama 'resolucion_propuesta' para evitar conflicto.
+   - Este modulo APROVECHA el trigger tg_vigencia_normativa del Sprint 2 para el versionamiento automatico del articulado.
+ 
+   NOTA: Como las tablas de Frank se crean MAS ABAJO en este archivo, las tablas de este modulo no pueden declarar las FK
+   a 'sesion' en su CREATE TABLE. Esas FK se agregan al final de Issue #11 con ALTER TABLE. */
+ 
+--6.5.1 Actas (1:1 con sesion: UNIQUE en id_sesion garantiza una acta por sesion)
 CREATE TABLE acta (
-    id_acta          INT IDENTITY(1,1) PRIMARY KEY,
-    id_sesion        INT NOT NULL UNIQUE,
-    fecha_aprobacion DATE,
-    url_documento    NVARCHAR(500),
-    observaciones    NVARCHAR(MAX),
-    CONSTRAINT fk_acta_sesion FOREIGN KEY (id_sesion) REFERENCES sesiones(id_sesion)
+    id_acta           INT IDENTITY(1,1) PRIMARY KEY,
+    id_sesion         INT NOT NULL UNIQUE,
+    id_tipo_modalidad INT,
+    fecha_aprobacion  DATE,
+    url_documento     NVARCHAR(500),
+    link_acta         NVARCHAR(500),
+    observaciones     NVARCHAR(MAX),
+    CONSTRAINT fk_acta_modalidad FOREIGN KEY (id_tipo_modalidad) REFERENCES catalogo_maestro(id_item)
 );
 GO
-
---6.5.3 Propuestas (con recursividad para conciliadas via id_propuesta_padre)
+ 
+--6.5.2 Propuestas (con recursividad para conciliadas via id_propuesta_padre)
 CREATE TABLE propuesta (
     id_propuesta              INT IDENTITY(1,1) PRIMARY KEY,
     codigo_air                NVARCHAR(30)  NOT NULL UNIQUE,
@@ -330,8 +297,8 @@ CREATE TABLE propuesta (
     CONSTRAINT fk_propuesta_mayoria    FOREIGN KEY (id_tipo_mayoria_requerida) REFERENCES catalogo_maestro(id_item)
 );
 GO
-
---6.5.4 Proponentes (autoria multiple, relacion N:M)
+ 
+--6.5.3 Proponentes (autoria multiple, relacion N:M)
 CREATE TABLE proponente_propuesta (
     id_proponente_propuesta INT IDENTITY(1,1) PRIMARY KEY,
     id_propuesta            INT NOT NULL,
@@ -342,8 +309,8 @@ CREATE TABLE proponente_propuesta (
     CONSTRAINT uq_proponente UNIQUE (id_propuesta, id_asambleista)
 );
 GO
-
---6.5.5 Bitacora de cambios de estado de las propuestas
+ 
+--6.5.4 Bitacora de cambios de estado de las propuestas
 CREATE TABLE bitacora_propuesta (
     id_registro_bitacora INT IDENTITY(1,1) PRIMARY KEY,
     id_propuesta         INT NOT NULL,
@@ -361,72 +328,50 @@ CREATE TABLE bitacora_propuesta (
     CONSTRAINT fk_bitprop_usuario    FOREIGN KEY (usuario_modificacion) REFERENCES sys_usuario(id_usuario)
 );
 GO
-
---6.5.6 Puntos de agenda (orden del dia de cada sesion)
+ 
+--6.5.5 Puntos de agenda (orden del dia de cada sesion)
+-- NOTA: la FK a 'sesion' se agrega despues de que Frank crea esa
+-- tabla en Issue #11.
 CREATE TABLE punto_agenda (
     id_punto_agenda INT IDENTITY(1,1) PRIMARY KEY,
     id_sesion       INT NOT NULL,
     id_propuesta    INT NOT NULL,
     orden           INT NOT NULL,
     descripcion     NVARCHAR(500),
-    CONSTRAINT fk_punto_sesion    FOREIGN KEY (id_sesion)    REFERENCES sesiones(id_sesion),
     CONSTRAINT fk_punto_propuesta FOREIGN KEY (id_propuesta) REFERENCES propuesta(id_propuesta),
     CONSTRAINT uq_punto_sesion_propuesta UNIQUE (id_sesion, id_propuesta),
     CONSTRAINT uq_punto_sesion_orden     UNIQUE (id_sesion, orden)
 );
 GO
-
---6.5.7 Resoluciones (numero oficial AIR-RES-XXX-YYYY)
-CREATE TABLE resolucion (
-    id_resolucion     INT IDENTITY(1,1) PRIMARY KEY,
-    id_punto_agenda   INT NOT NULL UNIQUE,
-    numero_resolucion NVARCHAR(30) NOT NULL UNIQUE,
-    fecha_emision     DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
-    CONSTRAINT fk_resolucion_punto FOREIGN KEY (id_punto_agenda) REFERENCES punto_agenda(id_punto_agenda)
+ 
+--6.5.6 Resoluciones de propuestas (numero oficial AIR-RES-XXX-YYYY)
+-- Nombre: 'resolucion_propuesta' para no chocar con la 'resolucion'
+-- del motor de votaciones de Frank (Issue #12).
+CREATE TABLE resolucion_propuesta (
+    id_resolucion_propuesta INT IDENTITY(1,1) PRIMARY KEY,
+    id_punto_agenda         INT NOT NULL UNIQUE,
+    numero_resolucion       NVARCHAR(30) NOT NULL UNIQUE,
+    fecha_emision           DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT fk_resprop_punto FOREIGN KEY (id_punto_agenda) REFERENCES punto_agenda(id_punto_agenda)
 );
 GO
-
---6.5.8 Reforma aplicada (conecta una resolucion con el cambio al reglamento)
+ 
+--6.5.7 Reforma aplicada (conecta una resolucion de propuesta con el cambio al reglamento)
 CREATE TABLE reforma_aplicada (
-    id_reforma            INT IDENTITY(1,1) PRIMARY KEY,
-    id_resolucion         INT NOT NULL,
-    id_elemento_normativo INT NOT NULL,
-    id_tipo_reforma       INT NOT NULL,
-    texto_anterior        NVARCHAR(MAX),
-    texto_nuevo           NVARCHAR(MAX),
-    fecha_inicio_vigencia DATE NOT NULL DEFAULT CAST(SYSUTCDATETIME() AS DATE),
-    CONSTRAINT fk_reforma_resolucion FOREIGN KEY (id_resolucion)         REFERENCES resolucion(id_resolucion),
-    CONSTRAINT fk_reforma_elemento   FOREIGN KEY (id_elemento_normativo) REFERENCES elemento_normativo(id_elemento),
-    CONSTRAINT fk_reforma_tipo       FOREIGN KEY (id_tipo_reforma)       REFERENCES catalogo_maestro(id_item)
+    id_reforma              INT IDENTITY(1,1) PRIMARY KEY,
+    id_resolucion_propuesta INT NOT NULL,
+    id_elemento_normativo   INT NOT NULL,
+    id_tipo_reforma         INT NOT NULL,
+    texto_anterior          NVARCHAR(MAX),
+    texto_nuevo             NVARCHAR(MAX),
+    fecha_inicio_vigencia   DATE NOT NULL DEFAULT CAST(SYSUTCDATETIME() AS DATE),
+    CONSTRAINT fk_reforma_resprop  FOREIGN KEY (id_resolucion_propuesta) REFERENCES resolucion_propuesta(id_resolucion_propuesta),
+    CONSTRAINT fk_reforma_elemento FOREIGN KEY (id_elemento_normativo)   REFERENCES elemento_normativo(id_elemento),
+    CONSTRAINT fk_reforma_tipo     FOREIGN KEY (id_tipo_reforma)         REFERENCES catalogo_maestro(id_item)
 );
 GO
-
---6.5.9 Asistencia a sesiones plenarias
-CREATE TABLE asistencia_sesion_plenaria (
-    id_asistencia        INT IDENTITY(1,1) PRIMARY KEY,
-    id_sesion            INT NOT NULL,
-    id_asambleista       INT NOT NULL,
-    id_estado_asistencia INT NOT NULL,
-    CONSTRAINT fk_asistencia_sesion      FOREIGN KEY (id_sesion)            REFERENCES sesiones(id_sesion),
-    CONSTRAINT fk_asistencia_asambleista FOREIGN KEY (id_asambleista)       REFERENCES asambleista(id_asambleista),
-    CONSTRAINT fk_asistencia_estado      FOREIGN KEY (id_estado_asistencia) REFERENCES catalogo_maestro(id_item),
-    CONSTRAINT uq_asistencia_sesion_asambleista UNIQUE (id_sesion, id_asambleista)
-);
-GO
-
---6.5.10 FK pendientes del Sprint 2
--- nombramiento.resolucion_id y elemento_normativo.id_acuerdo_origen existian como columnas sueltas. Ahora que existe 'resolucion' podemos activar la integridad referencial.
-ALTER TABLE nombramiento
-    ADD CONSTRAINT fk_nombramiento_resolucion
-        FOREIGN KEY (resolucion_id) REFERENCES resolucion(id_resolucion);
-GO
-
-ALTER TABLE elemento_normativo
-    ADD CONSTRAINT fk_elemento_acuerdo_origen
-        FOREIGN KEY (id_acuerdo_origen) REFERENCES resolucion(id_resolucion);
-GO
-
-
+ 
+ 
 /* 7. TRIGGERS
    Nota general de migracion PostgreSQL -> T-SQL:
    - PostgreSQL usa una FUNCTION + un TRIGGER que la llama, con
@@ -441,10 +386,8 @@ GO
      ejecutar, al inicio de cada conexion/transaccion:
        EXEC sp_set_session_context @key=N'usuario_id', @value=?;
        EXEC sp_set_session_context @key=N'razon_cambio', @value=?; */
-
-/* 7.1 Trigger generico de auditoria  (Frank - Issue #0)
-   Registra INSERT / UPDATE / DELETE sobre asambleista y
-   nombramiento en sys_log_auditoria. */
+ 
+/* 7.1 Trigger generico de auditoria  (Frank - Issue #0) */
 GO
 CREATE TRIGGER tg_auditoria_asambleista
 ON asambleista
@@ -452,11 +395,10 @@ AFTER INSERT, UPDATE, DELETE
 AS
 BEGIN
     SET NOCOUNT ON;
-
+ 
     DECLARE @id_usuario INT =
         TRY_CAST(CAST(SESSION_CONTEXT(N'usuario_id') AS NVARCHAR(20)) AS INT);
-
-    -- INSERT o UPDATE: hay filas en INSERTED
+ 
     INSERT INTO sys_log_auditoria (id_usuario, accion, tabla_afectada, registro_id, detalle)
     SELECT
         @id_usuario,
@@ -466,8 +408,7 @@ BEGIN
         CONCAT('cedula=', i.cedula, '; nombre=', i.nombre,
                '; correo=', i.correo_institucional)
     FROM inserted i;
-
-    -- DELETE: hay filas en DELETED pero no en INSERTED
+ 
     INSERT INTO sys_log_auditoria (id_usuario, accion, tabla_afectada, registro_id, detalle)
     SELECT
         @id_usuario,
@@ -480,17 +421,17 @@ BEGIN
     WHERE NOT EXISTS (SELECT 1 FROM inserted);
 END;
 GO
-
+ 
 CREATE TRIGGER tg_auditoria_nombramiento
 ON nombramiento
 AFTER INSERT, UPDATE, DELETE
 AS
 BEGIN
     SET NOCOUNT ON;
-
+ 
     DECLARE @id_usuario INT =
         TRY_CAST(CAST(SESSION_CONTEXT(N'usuario_id') AS NVARCHAR(20)) AS INT);
-
+ 
     INSERT INTO sys_log_auditoria (id_usuario, accion, tabla_afectada, registro_id, detalle)
     SELECT
         @id_usuario,
@@ -502,7 +443,7 @@ BEGIN
                '; fecha_inicio=', CONVERT(NVARCHAR(10), i.fecha_inicio, 23),
                '; estado=', i.estado)
     FROM inserted i;
-
+ 
     INSERT INTO sys_log_auditoria (id_usuario, accion, tabla_afectada, registro_id, detalle)
     SELECT
         @id_usuario,
@@ -517,16 +458,9 @@ BEGIN
     WHERE NOT EXISTS (SELECT 1 FROM inserted);
 END;
 GO
-
-
-/* 7.2 Trigger de traslape de nombramientos  (Frank - Issue #9)
-   Impide registrar dos nombramientos del mismo asambleista cuyo
-   rango de fechas se traslape. Se dispara en INSERT y UPDATE.
-
-   Migracion: el trigger original era BEFORE ... FOR EACH ROW.
-   En T-SQL no existe BEFORE; se usa un trigger AFTER que valida
-   el conjunto recien insertado contra el resto y hace ROLLBACK
-   si detecta traslape. */
+ 
+ 
+/* 7.2 Trigger de traslape de nombramientos  (Frank - Issue #9) */
 GO
 CREATE TRIGGER tg_traslape_sector
 ON nombramiento
@@ -534,7 +468,7 @@ AFTER INSERT, UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
-
+ 
     IF EXISTS (
         SELECT 1
         FROM inserted i
@@ -542,8 +476,6 @@ BEGIN
           ON n.id_asambleista = i.id_asambleista
          AND n.id_nombramiento <> i.id_nombramiento
         WHERE
-            --dos rangos se traslapan si cada uno empieza antes
-            --de que el otro termine (NULL = vigente = fecha maxima)
             i.fecha_inicio <= ISNULL(n.fecha_fin, '9999-12-31')
             AND n.fecha_inicio <= ISNULL(i.fecha_fin, '9999-12-31')
     )
@@ -553,24 +485,9 @@ BEGIN
     END
 END;
 GO
-
-
-/* 7.3 Trigger de versionamiento normativo  (Josue - Issue #10)
-   Al insertar un elemento marcado como 'Vigente', marca como
-   'Historico' la version anterior con la misma etiqueta y mismo
-   padre dentro del mismo reglamento, y le pone fecha_fin_vigencia.
-
-   Migracion: el original era BEFORE INSERT FOR EACH ROW.
-
-   IMPORTANTE - por que INSTEAD OF y no AFTER:
-   El Partial Unique Index uq_etiqueta_vigente se valida DURANTE
-   el INSERT. Un trigger AFTER correria DESPUES de esa validacion,
-   asi que el indice rechazaria la reforma antes de que el trigger
-   pudiera archivar la version anterior. La unica forma de que el
-   versionamiento funcione es archivar la version vieja ANTES de
-   insertar la nueva. Eso exige INSTEAD OF INSERT: el trigger
-   toma el control, primero marca como Historico lo anterior, y
-   recien entonces hace el INSERT real de las filas nuevas. */
+ 
+ 
+/* 7.3 Trigger de versionamiento normativo  (Josue - Issue #10) */
 GO
 CREATE TRIGGER tg_vigencia_normativa
 ON elemento_normativo
@@ -578,12 +495,10 @@ INSTEAD OF INSERT
 AS
 BEGIN
     SET NOCOUNT ON;
-
+ 
     DECLARE @estado_vigente   INT = (SELECT id_estado_vigencia FROM catalogo_estado_vigencia WHERE nombre = 'Vigente');
     DECLARE @estado_historico INT = (SELECT id_estado_vigencia FROM catalogo_estado_vigencia WHERE nombre = 'Historico');
-
-    --Paso 1: archivar las versiones vigentes anteriores que seran
-    --reemplazadas por una fila nueva tambien marcada como Vigente.
+ 
     UPDATE en
     SET en.id_estado_vigencia = @estado_historico,
         en.fecha_fin_vigencia = CAST(SYSUTCDATETIME() AS DATE)
@@ -594,9 +509,7 @@ BEGIN
       AND en.numero_etiqueta = i.numero_etiqueta
     WHERE en.id_estado_vigencia = @estado_vigente
       AND i.id_estado_vigencia  = @estado_vigente;
-
-    --Paso 2: insertar realmente las filas nuevas. Para entonces
-    --el indice uq_etiqueta_vigente ya no encuentra conflicto.
+ 
     INSERT INTO elemento_normativo
         (id_reglamento, id_elemento_padre, id_nivel_reglamento,
          numero_etiqueta, contenido_texto, orden,
@@ -610,23 +523,9 @@ BEGIN
     FROM inserted;
 END;
 GO
-
-
-/* 7.4 Trigger atomico de foliado  (Arash - Issue #1)
-   Cuando se inserta una certificacion sin folio, genera el
-   siguiente consecutivo del anio con formato DAIR-001-2026.
-
-   Migracion / concurrencia:
-   - PostgreSQL usaba SELECT ... FOR UPDATE para bloquear la
-     fila del anio. En T-SQL el equivalente es leer la fila con
-     los hints (UPDLOCK, HOLDLOCK), que bloquea esa fila (o el
-     rango) hasta el fin de la transaccion del trigger,
-     serializando los INSERT concurrentes.
-   - Importante: este trigger soporta INSERT de varias filas.
-     Recorre las certificaciones sin folio una por una con un
-     cursor para asignar consecutivos correlativos. Para los
-     volumenes de este proyecto el costo es despreciable y la
-     correccion es prioritaria.*/
+ 
+ 
+/* 7.4 Trigger atomico de foliado  (Arash - Issue #1) */
 GO
 CREATE TRIGGER tg_folio_secuencial
 ON certificacion_emitida
@@ -634,65 +533,56 @@ INSTEAD OF INSERT
 AS
 BEGIN
     SET NOCOUNT ON;
-
+ 
     DECLARE @anio    INT = YEAR(SYSUTCDATETIME());
     DECLARE @prefijo NVARCHAR(10) = 'DAIR';
-
-    -- Asegura que exista la fila de control del anio actual
+ 
     IF NOT EXISTS (SELECT 1 FROM control_folio WHERE anio = @anio AND prefijo = @prefijo)
         INSERT INTO control_folio (anio, prefijo, ultimo_numero) VALUES (@anio, @prefijo, 0);
-
+ 
     DECLARE @id_asambleista INT, @folio NVARCHAR(30), @hash NVARCHAR(80),
             @fecha DATETIME2, @usuario INT, @siguiente INT;
-
+ 
     DECLARE cur CURSOR LOCAL FAST_FORWARD FOR
         SELECT id_asambleista, folio_unico, hash_seguridad, fecha_emision, usuario_secretaria
         FROM inserted;
-
+ 
     OPEN cur;
     FETCH NEXT FROM cur INTO @id_asambleista, @folio, @hash, @fecha, @usuario;
-
+ 
     WHILE @@FETCH_STATUS = 0
     BEGIN
         IF @folio IS NULL
         BEGIN
-            --Bloqueo de la fila de control para serializar concurrencia
             SELECT @siguiente = ultimo_numero + 1
             FROM control_folio WITH (UPDLOCK, HOLDLOCK)
             WHERE anio = @anio AND prefijo = @prefijo;
-
+ 
             UPDATE control_folio
             SET ultimo_numero = @siguiente,
                 fecha_actualizacion = SYSUTCDATETIME()
             WHERE anio = @anio AND prefijo = @prefijo;
-
+ 
             SET @folio = CONCAT(@prefijo, '-',
                                 RIGHT('000' + CAST(@siguiente AS NVARCHAR(10)), 3), '-',
                                 CAST(@anio AS NVARCHAR(4)));
         END
-
+ 
         INSERT INTO certificacion_emitida
             (id_asambleista, folio_unico, hash_seguridad, fecha_emision, usuario_secretaria)
         VALUES
             (@id_asambleista, @folio, @hash, ISNULL(@fecha, SYSUTCDATETIME()), @usuario);
-
+ 
         FETCH NEXT FROM cur INTO @id_asambleista, @folio, @hash, @fecha, @usuario;
     END
-
+ 
     CLOSE cur;
     DEALLOCATE cur;
 END;
 GO
-
-
-/* 7.5 Trigger de cambio de identidad  (Arash - Issue #14)
-   Cualquier UPDATE que cambie cedula o nombre en asambleista
-   genera automaticamente un registro en bitacora_asambleistas
-   con los valores anteriores.
-
-   Migracion: el original comparaba OLD vs NEW fila por fila.
-   En T-SQL se hace JOIN entre DELETED (valores previos) e
-   INSERTED (valores nuevos) por id_asambleista. */
+ 
+ 
+/* 7.5 Trigger de cambio de identidad  (Arash - Issue #14) */
 GO
 CREATE TRIGGER tg_cambio_identidad
 ON asambleista
@@ -700,10 +590,10 @@ AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
-
+ 
     DECLARE @razon NVARCHAR(200) =
         CAST(SESSION_CONTEXT(N'razon_cambio') AS NVARCHAR(200));
-
+ 
     INSERT INTO bitacora_asambleistas
         (id_asambleista, cedula_anterior, nombre_anterior, razon_cambio, fecha_actualizacion)
     SELECT
@@ -718,78 +608,61 @@ BEGIN
        OR ISNULL(d.nombre, '') <> ISNULL(i.nombre, '');
 END;
 GO
-
-
+ 
+ 
 --8. DATOS SEMILLA
-
+ 
 --8.1 Seguridad: roles y permisos (Frank - Issue #0) 
 INSERT INTO sys_rol (nombre_rol) VALUES
     ('Administrador'), ('Secretaria AIR'), ('Consulta'), ('Asambleista');
 GO
-
+ 
 INSERT INTO sys_permiso (nombre_permiso, descripcion) VALUES
     ('GESTIONAR_USUARIOS',      'Crear, editar y eliminar usuarios del sistema'),
     ('REGISTRAR_ASAMBLEISTAS',  'Crear y modificar el padron de asambleistas'),
     ('EMITIR_CERTIFICACION',    'Generar certificaciones legales con folio'),
     ('CONSULTAR_NORMATIVA',     'Visualizar reglamentos y articulado vigente');
 GO
-
-/* Asignacion rol -> permiso
-   Administrador: todos. Secretaria AIR: registrar y certificar y
-   consultar. Consulta: solo consultar normativa. */
+ 
 INSERT INTO sys_rol_permiso (id_rol, id_permiso)
 SELECT r.id_rol, p.id_permiso
 FROM sys_rol r
 CROSS JOIN sys_permiso p
 WHERE r.nombre_rol = 'Administrador';
-
+ 
 INSERT INTO sys_rol_permiso (id_rol, id_permiso)
 SELECT r.id_rol, p.id_permiso
 FROM sys_rol r
 JOIN sys_permiso p ON p.nombre_permiso IN
     ('REGISTRAR_ASAMBLEISTAS', 'EMITIR_CERTIFICACION', 'CONSULTAR_NORMATIVA')
 WHERE r.nombre_rol = 'Secretaria AIR';
-
+ 
 INSERT INTO sys_rol_permiso (id_rol, id_permiso)
 SELECT r.id_rol, p.id_permiso
 FROM sys_rol r
 JOIN sys_permiso p ON p.nombre_permiso = 'CONSULTAR_NORMATIVA'
 WHERE r.nombre_rol = 'Consulta';
+ 
 INSERT INTO sys_rol_permiso (id_rol, id_permiso)
 SELECT r.id_rol, p.id_permiso
 FROM sys_rol r
 JOIN sys_permiso p ON p.nombre_permiso = 'CONSULTAR_NORMATIVA'
 WHERE r.nombre_rol = 'Asambleista';
 GO
-
-/* Usuario administrador inicial.
-   IMPORTANTE: el hash de abajo es un placeholder. La aplicacion
-   Java debe, en el primer arranque, reemplazarlo por un hash
-   BCrypt real, o crear el usuario admin desde el codigo. NUNCA
-   guardar contrasenas en texto plano.
-   Hash BCrypt (factor de coste 12) correspondiente a la
-   contrasena 'Admin2026SglAir'. Generado con tools/GenerarHash.java.
-   Se recomienda cambiar esta contrasena en el primer arranque
-   productivo. */
+ 
 INSERT INTO sys_usuario (username, password_hash, email, activo) VALUES
     ('admin',
      '$2a$12$Dml3HUlko1YRJBX5u1hzp.c.IoHYbsoDK9f3q5Pu7bKsggek8N7lu',
      'admin@itcr.ac.cr',
      1);
 GO
-
+ 
 INSERT INTO sys_usuario_rol (id_usuario, id_rol)
 SELECT u.id_usuario, r.id_rol
 FROM sys_usuario u, sys_rol r
 WHERE u.username = 'admin' AND r.nombre_rol = 'Administrador';
 GO
-
-
-/* Usuarios adicionales para cada rol del sistema.
-   Contrasenas generadas con tools/GenerarHash.java (BCrypt factor 12).
-   secretaria  -> Secretaria2026
-   consulta    -> Consulta2026
-   asambleista -> Asambleista2026 */
+ 
 INSERT INTO sys_usuario (username, password_hash, email, activo) VALUES
     ('secretaria',
      '$2a$12$spaKNFen5SO6F9Bf2FZp8eTpGC6bMrAgzbyf3tIhpyfuoVgpLuZla',
@@ -799,7 +672,7 @@ INSERT INTO sys_usuario (username, password_hash, email, activo) VALUES
      '$2a$12$0Z6P26oC9KM4UqdOdrccUe7BuXvfiSEvGg.GbhWroe7zlJqSawzrC',
      'consulta@itcr.ac.cr', 1);
 GO
-
+ 
 INSERT INTO sys_usuario (username, password_hash, email, activo) VALUES
     ('asambleista',
      '$2a$12$gUY3AuY5Mdr0szeI7CsUFuAGdxBSPFUye.zUweEQO5zaep4inMnYK',
@@ -809,108 +682,95 @@ INSERT INTO sys_usuario_rol (id_usuario, id_rol)
 SELECT u.id_usuario, r.id_rol
 FROM sys_usuario u, sys_rol r
 WHERE u.username = 'secretaria' AND r.nombre_rol = 'Secretaria AIR';
-
+ 
 INSERT INTO sys_usuario_rol (id_usuario, id_rol)
 SELECT u.id_usuario, r.id_rol
 FROM sys_usuario u, sys_rol r
 WHERE u.username = 'consulta' AND r.nombre_rol = 'Consulta';
 GO
-
+ 
 INSERT INTO sys_usuario_rol (id_usuario, id_rol)
 SELECT u.id_usuario, r.id_rol
 FROM sys_usuario u, sys_rol r
 WHERE u.username = 'asambleista' AND r.nombre_rol = 'Asambleista';
-
+ 
 --8.2 Catalogo Maestro (Arash - Issue #1) 
 INSERT INTO catalogo_maestro (grupo_catalogo, nombre) VALUES
     ('SECTOR', 'Docente'),
     ('SECTOR', 'Estudiantil'),
     ('SECTOR', 'Administrativo'),
     ('SECTOR', 'Oficio (Consejo Institucional)'),
-
+ 
     ('PUESTO', 'Asambleista'),
     ('PUESTO', 'Presidente Directorio'),
     ('PUESTO', 'Secretaria AIR'),
     ('PUESTO', 'Asistente'),
-
+ 
     ('TIPO_SESION', 'Ordinaria'),
     ('TIPO_SESION', 'Extraordinaria'),
-
+ 
     ('TIPO_MODALIDAD', 'Presencial'),
     ('TIPO_MODALIDAD', 'Virtual'),
     ('TIPO_MODALIDAD', 'Mixta'),
-
+ 
     ('ETAPA_PROPUESTA', 'Procedencia'),
     ('ETAPA_PROPUESTA', 'Aprobacion'),
-
+ 
     ('ESTADO_PROPUESTA', 'Pendiente de Revision'),
     ('ESTADO_PROPUESTA', 'En Discusion'),
     ('ESTADO_PROPUESTA', 'Aprobada'),
     ('ESTADO_PROPUESTA', 'Rechazada'),
-
+ 
     ('TIPO_MAYORIA', 'Simple 50 mas 1'),
     ('TIPO_MAYORIA', 'Calificada 2 tercios'),
-
+ 
     ('TIPO_REFORMA', 'Modificacion'),
     ('TIPO_REFORMA', 'Derogacion'),
     ('TIPO_REFORMA', 'Adicion'),
     ('TIPO_REFORMA', 'Texto Sustitutivo'),
-
+ 
     ('TIPO_TRAMITE', 'Informe'),
     ('TIPO_TRAMITE', 'Mocion'),
     ('TIPO_TRAMITE', 'Varios'),
-
+ 
     ('ROL_COMISION', 'Coordinador'),
     ('ROL_COMISION', 'Integrante'),
     ('ROL_COMISION', 'Secretario Comision'),
-
+ 
     ('TIPO_COMISION', 'Permanente'),
     ('TIPO_COMISION', 'Especial'),
-
+ 
     ('ESTADO_ASISTENCIA', 'Presente'),
     ('ESTADO_ASISTENCIA', 'Ausente'),
     ('ESTADO_ASISTENCIA', 'Justificado');
 GO
-
-
-/* 8.3 Catalogos de normativa (Josue - Issue #10) 
-   El ORDEN de estos INSERT es critico: el filtered index
-   uq_etiqueta_vigente depende de que 'Vigente' tenga id = 1.
-   Por eso 'Vigente' se inserta primero. */
+ 
+ 
+/* 8.3 Catalogos de normativa (Josue - Issue #10) */
 INSERT INTO catalogo_estado_vigencia (nombre) VALUES
     ('Vigente'), ('Historico'), ('Derogado');
 GO
-
+ 
 INSERT INTO catalogo_nivel_reglamento (nombre, orden) VALUES
     ('Titulo', 1), ('Capitulo', 2), ('Articulo', 3),
     ('Inciso', 4), ('Sub-inciso', 5);
 GO
-
-
-/* 8.4 Datos semilla del Estatuto Organico (Josue - Issue #10)
-   Arbol de ejemplo.
-   IMPORTANTE: la tabla elemento_normativo tiene un trigger
-   INSTEAD OF INSERT, por lo que SCOPE_IDENTITY() NO funciona aqui
-   (devolveria NULL: el INSERT real ocurre dentro del trigger, en
-   otro scope). Por eso cada id se recupera con un SELECT por su
-   clave natural: reglamento + etiqueta + padre. Es mas verboso
-   pero es la forma correcta y robusta de sembrar el arbol. */
-
+ 
+ 
+/* 8.4 Datos semilla del Estatuto Organico (Josue - Issue #10) */
 INSERT INTO reglamento (nombre_normativa, sigla, emisor) VALUES
     ('Estatuto Organico del ITCR', 'EOITCR', 'AIR');
 INSERT INTO reglamento (nombre_normativa, sigla, emisor) VALUES
     ('Reglamento de la AIR', 'RAIR', 'AIR');
-
+ 
 DECLARE @id_reg INT = (SELECT id_reglamento FROM reglamento WHERE sigla = 'EOITCR');
-
---ids de niveles y estado
+ 
 DECLARE @niv_titulo   INT = (SELECT id_nivel_reglamento FROM catalogo_nivel_reglamento WHERE nombre = 'Titulo');
 DECLARE @niv_capitulo INT = (SELECT id_nivel_reglamento FROM catalogo_nivel_reglamento WHERE nombre = 'Capitulo');
 DECLARE @niv_articulo INT = (SELECT id_nivel_reglamento FROM catalogo_nivel_reglamento WHERE nombre = 'Articulo');
 DECLARE @niv_inciso   INT = (SELECT id_nivel_reglamento FROM catalogo_nivel_reglamento WHERE nombre = 'Inciso');
 DECLARE @est_vigente  INT = (SELECT id_estado_vigencia  FROM catalogo_estado_vigencia  WHERE nombre = 'Vigente');
-
---Titulo II (raiz, sin padre)
+ 
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
@@ -918,8 +778,7 @@ VALUES
 DECLARE @id_titulo2 INT = (
     SELECT id_elemento FROM elemento_normativo
     WHERE id_reglamento = @id_reg AND id_elemento_padre IS NULL AND numero_etiqueta = 'II');
-
---Capitulo I dentro del Titulo II
+ 
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
@@ -927,8 +786,7 @@ VALUES
 DECLARE @id_cap1 INT = (
     SELECT id_elemento FROM elemento_normativo
     WHERE id_reglamento = @id_reg AND id_elemento_padre = @id_titulo2 AND numero_etiqueta = 'I');
-
---Articulo 18 dentro del Capitulo I
+ 
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
@@ -938,24 +796,21 @@ VALUES
 DECLARE @id_art18 INT = (
     SELECT id_elemento FROM elemento_normativo
     WHERE id_reglamento = @id_reg AND id_elemento_padre = @id_cap1 AND numero_etiqueta = '18');
-
---Incisos del Articulo 18
+ 
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
     (@id_reg, @id_art18, @niv_inciso, 'a)', 'Aprobar las reformas al Estatuto Organico.', 1, @est_vigente),
     (@id_reg, @id_art18, @niv_inciso, 'b)', 'Conocer y resolver sobre los recursos de su competencia.', 2, @est_vigente),
     (@id_reg, @id_art18, @niv_inciso, 'c)', 'Las demas que le asigne el Estatuto Organico.', 3, @est_vigente);
-
---Articulo 19 dentro del Capitulo I
+ 
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
     (@id_reg, @id_cap1, @niv_articulo, '19',
      'La Asamblea Institucional Representativa estara constituida segun lo defina el reglamento.',
      2, @est_vigente);
-
---Titulo III (segundo titulo raiz, para cumplir el minimo del plan)
+ 
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
@@ -963,8 +818,7 @@ VALUES
 DECLARE @id_titulo3 INT = (
     SELECT id_elemento FROM elemento_normativo
     WHERE id_reglamento = @id_reg AND id_elemento_padre IS NULL AND numero_etiqueta = 'III');
-
---Capitulo I dentro del Titulo III
+ 
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
@@ -972,8 +826,7 @@ VALUES
 DECLARE @id_cap3_1 INT = (
     SELECT id_elemento FROM elemento_normativo
     WHERE id_reglamento = @id_reg AND id_elemento_padre = @id_titulo3 AND numero_etiqueta = 'I');
-
---Articulos dentro del Capitulo I del Titulo III
+ 
 INSERT INTO elemento_normativo
     (id_reglamento, id_elemento_padre, id_nivel_reglamento, numero_etiqueta, contenido_texto, orden, id_estado_vigencia)
 VALUES
@@ -982,41 +835,37 @@ VALUES
     (@id_reg, @id_cap3_1, @niv_articulo, '21',
      'El Consejo Institucional estara integrado conforme al Estatuto Organico.', 2, @est_vigente);
 GO
-
-
-/* 8.5 Asambleistas de ejemplo (Frank - Issue #9) 
-   Cinco asambleistas con nombramientos diversos para la
-   validacion final del Dia 10. Se capturan los ids con
-   SCOPE_IDENTITY para enlazar los nombramientos. */
-
+ 
+ 
+/* 8.5 Asambleistas de ejemplo (Frank - Issue #9) */
+ 
 DECLARE @sector_docente INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='SECTOR' AND nombre='Docente');
 DECLARE @sector_estud   INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='SECTOR' AND nombre='Estudiantil');
 DECLARE @sector_admin   INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='SECTOR' AND nombre='Administrativo');
 DECLARE @puesto_asamb   INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='PUESTO' AND nombre='Asambleista');
 DECLARE @puesto_pres    INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='PUESTO' AND nombre='Presidente Directorio');
 DECLARE @id_admin_user  INT = (SELECT id_usuario FROM sys_usuario WHERE username='admin');
-
+ 
 INSERT INTO asambleista (cedula, nombre, correo_institucional) VALUES
     ('1-1111-1111', 'Ana Rosa Ruiz Fernandez',  'aruiz@itcr.ac.cr');
 DECLARE @id_a1 INT = SCOPE_IDENTITY();
-
+ 
 INSERT INTO asambleista (cedula, nombre, correo_institucional) VALUES
     ('2-2222-2222', 'Carlos Jimenez Mora',      'cjimenez@itcr.ac.cr');
 DECLARE @id_a2 INT = SCOPE_IDENTITY();
-
+ 
 INSERT INTO asambleista (cedula, nombre, correo_institucional) VALUES
     ('3-3333-3333', 'Maria Solano Vargas',      'msolano@estudiantec.cr');
 DECLARE @id_a3 INT = SCOPE_IDENTITY();
-
+ 
 INSERT INTO asambleista (cedula, nombre, correo_institucional) VALUES
     ('4-4444-4444', 'Jose Pablo Castro Leon',   'jcastro@itcr.ac.cr');
 DECLARE @id_a4 INT = SCOPE_IDENTITY();
-
+ 
 INSERT INTO asambleista (cedula, nombre, correo_institucional) VALUES
     ('5-5555-5555', 'Laura Mendez Quesada',     'lmendez@itcr.ac.cr');
 DECLARE @id_a5 INT = SCOPE_IDENTITY();
-
---Nombramientos (sin traslapes entre si para un mismo asambleista)
+ 
 INSERT INTO nombramiento (id_asambleista, id_sector, id_puesto, fecha_inicio, fecha_fin, estado, id_usuario_registro) VALUES
     (@id_a1, @sector_docente, @puesto_asamb, '2022-01-01', '2023-12-31', 'Inactivo', @id_admin_user),
     (@id_a1, @sector_docente, @puesto_pres,  '2024-01-01', NULL,         'Vigente',  @id_admin_user),
@@ -1025,19 +874,563 @@ INSERT INTO nombramiento (id_asambleista, id_sector, id_puesto, fecha_inicio, fe
     (@id_a4, @sector_admin,   @puesto_asamb, '2021-01-01', '2022-12-31', 'Inactivo', @id_admin_user),
     (@id_a5, @sector_docente, @puesto_asamb, '2024-01-15', NULL,         'Vigente',  @id_admin_user);
 GO
+ 
+ 
+-- ISSUE #11: CONTROL DE QUORUM
+-- Autor: Frank
+-- Sprint: 3
+-- Descripcion: Registro de sesiones de la AIR con asistencia
+-- por asambleista y validacion del quorum legal minimo.
+ 
+-- 11.1  Estados de asistencia en catalogo_maestro
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_ASISTENCIA'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('ESTADO_ASISTENCIA', 'Presente',    1),
+        ('ESTADO_ASISTENCIA', 'Ausente',     1),
+        ('ESTADO_ASISTENCIA', 'Justificado', 1);
+END;
+GO
+ 
+-- 11.2  Tipos de sesion en catalogo_maestro
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'TIPO_SESION'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('TIPO_SESION', 'Ordinaria',     1),
+        ('TIPO_SESION', 'Extraordinaria',1);
+END;
+GO
+ 
+-- 11.3  Tabla: sesion
+CREATE TABLE sesion (
+    id_sesion         INT IDENTITY(1,1) PRIMARY KEY,
+    numero_sesion     NVARCHAR(30)  NOT NULL,
+    fecha_sesion      DATETIME2     NOT NULL,
+    id_tipo_sesion    INT           NOT NULL,
+    quorum_requerido  INT           NOT NULL,
+    total_convocados  INT           NOT NULL,
+    cerrada           BIT           NOT NULL DEFAULT 0,
+    fecha_creacion    DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT uq_sesion_numero UNIQUE (numero_sesion),
+    CONSTRAINT fk_sesion_tipo
+        FOREIGN KEY (id_tipo_sesion) REFERENCES catalogo_maestro(id_item),
+    CONSTRAINT ck_quorum_valido
+        CHECK (quorum_requerido > 0 AND quorum_requerido <= total_convocados)
+);
+GO
+ 
+-- 11.4  Tabla: asistencia_sesion_plenaria
+CREATE TABLE asistencia_sesion_plenaria (
+    id_asistencia       INT IDENTITY(1,1) PRIMARY KEY,
+    id_sesion           INT NOT NULL,
+    id_asambleista      INT NOT NULL,
+    id_estado_asistencia INT NOT NULL,
+    fecha_registro      DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT uq_asistencia_sesion_asambleista UNIQUE (id_sesion, id_asambleista),
+    CONSTRAINT fk_asistencia_sesion
+        FOREIGN KEY (id_sesion) REFERENCES sesion(id_sesion),
+    CONSTRAINT fk_asistencia_asambleista
+        FOREIGN KEY (id_asambleista) REFERENCES asambleista(id_asambleista),
+    CONSTRAINT fk_asistencia_estado
+        FOREIGN KEY (id_estado_asistencia) REFERENCES catalogo_maestro(id_item)
+);
+GO
+ 
+-- 11.5  Indices para queries de quorum y reportes
+CREATE INDEX idx_asistencia_sesion ON asistencia_sesion_plenaria(id_sesion);
+CREATE INDEX idx_asistencia_asambleista ON asistencia_sesion_plenaria(id_asambleista);
+GO
+ 
+-- 11.6  FK PENDIENTES DE ISSUE #10 PARTE II
+-- Ahora que la tabla 'sesion' existe, activamos las FK de las
+-- tablas 'acta' y 'punto_agenda' (Josue - Issue #10 Parte II)
+-- que apuntan a 'sesion'.
+ALTER TABLE acta
+    ADD CONSTRAINT fk_acta_sesion FOREIGN KEY (id_sesion) REFERENCES sesion(id_sesion);
+GO
+ 
+ALTER TABLE punto_agenda
+    ADD CONSTRAINT fk_punto_sesion FOREIGN KEY (id_sesion) REFERENCES sesion(id_sesion);
+GO
+ 
+-- FIN ISSUE #11
+ 
+ 
+-- ISSUE #13: BITACORA DE AUDITORIA Y TRAZABILIDAD DE EMISIONES
+-- Autor: Frank
+-- Sprint: 3
+ 
+-- 13.1  Tipos de accion en catalogo_maestro
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ACCION_LOG_CERT'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('ACCION_LOG_CERT', 'EMISION',     1),
+        ('ACCION_LOG_CERT', 'REIMPRESION', 1),
+        ('ACCION_LOG_CERT', 'ANULACION',   1),
+        ('ACCION_LOG_CERT', 'SUSTITUCION', 1),
+        ('ACCION_LOG_CERT', 'CONSULTA',    1);
+END;
+GO
+ 
+-- 13.2  Tabla: log_certificacion_emitida
+CREATE TABLE log_certificacion_emitida (
+    id_log             INT IDENTITY(1,1) PRIMARY KEY,
+    id_certificacion   INT NOT NULL,
+    folio_unico        NVARCHAR(30) NOT NULL,
+    id_accion          INT NOT NULL,
+    id_usuario         INT NOT NULL,
+    fecha_evento       DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    ip_origen          NVARCHAR(45) NULL,
+    hash_documento     NVARCHAR(80) NULL,
+    snapshot_json      NVARCHAR(MAX) NULL,
+    observacion        NVARCHAR(500) NULL,
+    CONSTRAINT fk_log_cert_certificacion
+        FOREIGN KEY (id_certificacion) REFERENCES certificacion_emitida(id_certificacion),
+    CONSTRAINT fk_log_cert_accion
+        FOREIGN KEY (id_accion) REFERENCES catalogo_maestro(id_item),
+    CONSTRAINT fk_log_cert_usuario
+        FOREIGN KEY (id_usuario) REFERENCES sys_usuario(id_usuario)
+);
+GO
+ 
+-- 13.3  Tabla: seguridad_log
+CREATE TABLE seguridad_log (
+    id_seguridad_log INT IDENTITY(1,1) PRIMARY KEY,
+    id_usuario       INT NOT NULL,
+    accion           NVARCHAR(80) NOT NULL,
+    tabla_consultada NVARCHAR(80) NULL,
+    registro_id      INT NULL,
+    ip_origen        NVARCHAR(45) NULL,
+    fecha_evento     DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    detalle          NVARCHAR(500) NULL,
+    CONSTRAINT fk_seguridad_log_usuario
+        FOREIGN KEY (id_usuario) REFERENCES sys_usuario(id_usuario)
+);
+GO
+ 
+-- 13.4  Indices para queries de auditoria
+CREATE INDEX idx_log_cert_certificacion ON log_certificacion_emitida(id_certificacion);
+CREATE INDEX idx_log_cert_folio ON log_certificacion_emitida(folio_unico);
+CREATE INDEX idx_log_cert_fecha ON log_certificacion_emitida(fecha_evento);
+CREATE INDEX idx_seguridad_log_usuario ON seguridad_log(id_usuario);
+CREATE INDEX idx_seguridad_log_fecha ON seguridad_log(fecha_evento);
+GO
+ 
+-- FIN ISSUE #13
+ 
+ 
+-- ISSUE #12: MOTOR DE VOTACIONES
+-- Autor: Frank
+-- Sprint: 3
+ 
+-- 12.1  Tipos de mayoria en catalogo_maestro
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'TIPO_MAYORIA'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('TIPO_MAYORIA', 'Simple',     1),
+        ('TIPO_MAYORIA', 'Calificada', 1);
+END;
+GO
+ 
+-- 12.2  Tipos de voto en catalogo_maestro
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'TIPO_VOTO'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('TIPO_VOTO', 'Nominal', 1),
+        ('TIPO_VOTO', 'Secreto', 1);
+END;
+GO
+ 
+-- 12.3  Sentido del voto en catalogo_maestro
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'SENTIDO_VOTO'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('SENTIDO_VOTO', 'A favor',    1),
+        ('SENTIDO_VOTO', 'En contra',  1),
+        ('SENTIDO_VOTO', 'Abstencion', 1);
+END;
+GO
+ 
+-- 12.4  Estado de votacion en catalogo_maestro
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_VOTACION'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('ESTADO_VOTACION', 'Abierta',    1),
+        ('ESTADO_VOTACION', 'Cerrada',    1),
+        ('ESTADO_VOTACION', 'Aprobada',   1),
+        ('ESTADO_VOTACION', 'Rechazada',  1);
+END;
+GO
+ 
+-- 12.5  Tabla: votacion
+CREATE TABLE votacion (
+    id_votacion        INT IDENTITY(1,1) PRIMARY KEY,
+    id_sesion          INT NOT NULL,
+    titulo             NVARCHAR(300) NOT NULL,
+    descripcion        NVARCHAR(MAX) NULL,
+    id_tipo_voto       INT NOT NULL,
+    id_tipo_mayoria    INT NOT NULL,
+    id_estado_votacion INT NOT NULL,
+    total_presentes    INT NULL,
+    votos_favor        INT NOT NULL DEFAULT 0,
+    votos_contra       INT NOT NULL DEFAULT 0,
+    votos_abstencion   INT NOT NULL DEFAULT 0,
+    fecha_apertura     DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    fecha_cierre       DATETIME2 NULL,
+    CONSTRAINT fk_votacion_sesion
+        FOREIGN KEY (id_sesion) REFERENCES sesion(id_sesion),
+    CONSTRAINT fk_votacion_tipo_voto
+        FOREIGN KEY (id_tipo_voto) REFERENCES catalogo_maestro(id_item),
+    CONSTRAINT fk_votacion_tipo_mayoria
+        FOREIGN KEY (id_tipo_mayoria) REFERENCES catalogo_maestro(id_item),
+    CONSTRAINT fk_votacion_estado
+        FOREIGN KEY (id_estado_votacion) REFERENCES catalogo_maestro(id_item),
+    CONSTRAINT ck_conteo_no_negativo
+        CHECK (votos_favor >= 0 AND votos_contra >= 0 AND votos_abstencion >= 0)
+);
+GO
+ 
+-- 12.6  Tabla: voto
+CREATE TABLE voto (
+    id_voto         INT IDENTITY(1,1) PRIMARY KEY,
+    id_votacion     INT NOT NULL,
+    id_asambleista  INT NULL,
+    id_sentido_voto INT NOT NULL,
+    fecha_voto      DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT fk_voto_votacion
+        FOREIGN KEY (id_votacion) REFERENCES votacion(id_votacion),
+    CONSTRAINT fk_voto_asambleista
+        FOREIGN KEY (id_asambleista) REFERENCES asambleista(id_asambleista),
+    CONSTRAINT fk_voto_sentido
+        FOREIGN KEY (id_sentido_voto) REFERENCES catalogo_maestro(id_item)
+);
+GO
+ 
+CREATE UNIQUE INDEX uq_voto_nominal_unico
+ON voto(id_votacion, id_asambleista)
+WHERE id_asambleista IS NOT NULL;
+GO
+ 
+-- 12.7  Tabla: resolucion (motor de votaciones de Frank)
+CREATE TABLE resolucion (
+    id_resolucion     INT IDENTITY(1,1) PRIMARY KEY,
+    id_votacion       INT NOT NULL,
+    numero_resolucion NVARCHAR(50) NOT NULL,
+    descripcion       NVARCHAR(MAX) NOT NULL,
+    fecha_emision     DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    es_firme          BIT NOT NULL DEFAULT 0,
+    CONSTRAINT uq_resolucion_numero UNIQUE (numero_resolucion),
+    CONSTRAINT fk_resolucion_votacion
+        FOREIGN KEY (id_votacion) REFERENCES votacion(id_votacion)
+);
+GO
+ 
+-- 12.8  Indices para queries de motor de votaciones
+CREATE INDEX idx_voto_votacion ON voto(id_votacion);
+CREATE INDEX idx_votacion_sesion ON votacion(id_sesion);
+CREATE INDEX idx_resolucion_votacion ON resolucion(id_votacion);
+GO
+ 
+-- FIN ISSUE #12
+ 
+ 
+-- ISSUE #15: GESTION DE ANULACIONES Y SUSTITUCIONES
+-- Autor: Arash
+-- Sprint: 3
+-- Descripcion: Extiende certificacion_emitida para soportar
+-- anulaciones sin reutilizacion de folios y emision de
+-- certificaciones de sustitucion con trazabilidad legal.
 
-/* 8.6 SPRINT 3 - ISSUE #10 PARTE II - DATOS SEMILLA
-Responsable: Josue - Issue #10 Parte II
-Demuestra el flujo completo del proceso legislativo:
-1. Dos sesiones (una ordinaria, una extraordinaria)
-2. Una propuesta base + una propuesta conciliada (recursion)
-3. Dos proponentes (autoria multiple N:M)
-4. Un punto de agenda
-5. Una resolucion oficial
-6. Una reforma_aplicada que apunta al Articulo 18
-7. Asistencia a la sesion ordinaria*/
-
---ids de catalogos
+-- 15.1  Estados de certificacion en catalogo_maestro
+IF NOT EXISTS (
+    SELECT 1 FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_CERTIFICACION'
+)
+BEGIN
+    INSERT INTO catalogo_maestro (grupo_catalogo, nombre, activo) VALUES
+        ('ESTADO_CERTIFICACION', 'Activa',     1),
+        ('ESTADO_CERTIFICACION', 'Anulada',    1),
+        ('ESTADO_CERTIFICACION', 'Sustituida', 1);
+END;
+GO
+ 
+-- 15.2  Columnas nuevas en certificacion_emitida
+ALTER TABLE certificacion_emitida
+ADD
+    id_estado                  INT           NULL,
+    motivo_anulacion           NVARCHAR(500) NULL,
+    fecha_anulacion            DATETIME2     NULL,
+    usuario_anulacion          INT           NULL,
+    id_certificacion_sustituye INT           NULL;
+GO
+ 
+-- 15.3  Inicializar certificaciones existentes como 'Activa'
+UPDATE certificacion_emitida
+SET id_estado = (
+    SELECT id_item FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_CERTIFICACION' AND nombre = 'Activa'
+)
+WHERE id_estado IS NULL;
+GO
+ 
+-- 15.4  Hacer id_estado obligatorio + agregar constraints
+ALTER TABLE certificacion_emitida
+ALTER COLUMN id_estado INT NOT NULL;
+GO
+ 
+ALTER TABLE certificacion_emitida
+ADD CONSTRAINT fk_certificacion_estado
+    FOREIGN KEY (id_estado) REFERENCES catalogo_maestro(id_item);
+GO
+ 
+ALTER TABLE certificacion_emitida
+ADD CONSTRAINT fk_certificacion_sustituye
+    FOREIGN KEY (id_certificacion_sustituye)
+    REFERENCES certificacion_emitida(id_certificacion);
+GO
+ 
+ALTER TABLE certificacion_emitida
+ADD CONSTRAINT fk_certificacion_usuario_anulacion
+    FOREIGN KEY (usuario_anulacion) REFERENCES sys_usuario(id_usuario);
+GO
+ 
+-- 15.5 CHECK constraint: coherencia entre estado y campos
+ALTER TABLE certificacion_emitida
+ADD CONSTRAINT ck_anulacion_coherente
+    CHECK (
+        (
+            id_estado = 37
+            AND motivo_anulacion IS NULL
+            AND fecha_anulacion IS NULL
+            AND usuario_anulacion IS NULL
+        )
+        OR
+        (
+            id_estado IN (38, 39)
+            AND motivo_anulacion IS NOT NULL
+            AND fecha_anulacion IS NOT NULL
+            AND usuario_anulacion IS NOT NULL
+        )
+    );
+GO
+ 
+-- 15.6  STORED PROCEDURE: Anular certificacion
+CREATE OR ALTER PROCEDURE sp_anular_certificacion
+    @folio_unico       NVARCHAR(30),
+    @motivo            NVARCHAR(500),
+    @usuario_anulacion INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+ 
+    DECLARE @id_certificacion INT;
+    DECLARE @id_estado_actual INT;
+    DECLARE @id_estado_activa INT;
+    DECLARE @id_estado_anulada INT;
+ 
+    SELECT @id_estado_activa = id_item
+    FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_CERTIFICACION' AND nombre = 'Activa';
+ 
+    SELECT @id_estado_anulada = id_item
+    FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_CERTIFICACION' AND nombre = 'Anulada';
+ 
+    SELECT
+        @id_certificacion = id_certificacion,
+        @id_estado_actual = id_estado
+    FROM certificacion_emitida
+    WHERE folio_unico = @folio_unico;
+ 
+    IF @id_certificacion IS NULL
+    BEGIN
+        RAISERROR('No existe una certificacion con el folio %s.', 16, 1, @folio_unico);
+        RETURN;
+    END;
+ 
+    IF @id_estado_actual <> @id_estado_activa
+    BEGIN
+        RAISERROR('Solo se pueden anular certificaciones en estado Activa. Folio: %s', 16, 1, @folio_unico);
+        RETURN;
+    END;
+ 
+    IF LTRIM(RTRIM(ISNULL(@motivo, ''))) = ''
+    BEGIN
+        RAISERROR('El motivo de anulacion es obligatorio.', 16, 1);
+        RETURN;
+    END;
+ 
+    UPDATE certificacion_emitida
+    SET
+        id_estado         = @id_estado_anulada,
+        motivo_anulacion  = @motivo,
+        fecha_anulacion   = SYSUTCDATETIME(),
+        usuario_anulacion = @usuario_anulacion
+    WHERE id_certificacion = @id_certificacion;
+ 
+    PRINT 'Certificacion ' + @folio_unico + ' anulada correctamente.';
+END;
+GO
+ 
+ 
+-- 15.7  STORED PROCEDURE: Emitir certificacion de sustitucion
+CREATE OR ALTER PROCEDURE sp_emitir_sustitucion
+    @folio_anterior        NVARCHAR(30),
+    @motivo                NVARCHAR(500),
+    @usuario_secretaria    INT,
+    @nuevo_folio           NVARCHAR(30) OUTPUT,
+    @nuevo_id_certificacion INT         OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+ 
+    DECLARE @id_cert_anterior INT;
+    DECLARE @id_asambleista   INT;
+    DECLARE @hash_anterior    NVARCHAR(80);
+    DECLARE @id_estado_activa INT;
+    DECLARE @id_estado_sustituida INT;
+ 
+    SELECT @id_estado_activa = id_item
+    FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_CERTIFICACION' AND nombre = 'Activa';
+ 
+    SELECT @id_estado_sustituida = id_item
+    FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_CERTIFICACION' AND nombre = 'Sustituida';
+ 
+    SELECT
+        @id_cert_anterior = id_certificacion,
+        @id_asambleista   = id_asambleista,
+        @hash_anterior    = hash_seguridad
+    FROM certificacion_emitida
+    WHERE folio_unico = @folio_anterior;
+ 
+    IF @id_cert_anterior IS NULL
+    BEGIN
+        RAISERROR('No existe una certificacion con el folio %s.', 16, 1, @folio_anterior);
+        RETURN;
+    END;
+ 
+    IF NOT EXISTS (
+        SELECT 1 FROM certificacion_emitida
+        WHERE id_certificacion = @id_cert_anterior AND id_estado = @id_estado_activa
+    )
+    BEGIN
+        RAISERROR('Solo se pueden sustituir certificaciones en estado Activa.', 16, 1);
+        RETURN;
+    END;
+ 
+    BEGIN TRY
+        BEGIN TRANSACTION;
+ 
+        UPDATE certificacion_emitida
+        SET
+            id_estado         = @id_estado_sustituida,
+            motivo_anulacion  = @motivo,
+            fecha_anulacion   = SYSUTCDATETIME(),
+            usuario_anulacion = @usuario_secretaria
+        WHERE id_certificacion = @id_cert_anterior;
+ 
+        INSERT INTO certificacion_emitida (
+            id_asambleista,
+            folio_unico,
+            hash_seguridad,
+            usuario_secretaria,
+            id_estado,
+            id_certificacion_sustituye
+        )
+        VALUES (
+            @id_asambleista,
+            'PENDIENTE',
+            NULL,
+            @usuario_secretaria,
+            @id_estado_activa,
+            @id_cert_anterior
+        );
+ 
+        SET @nuevo_id_certificacion = SCOPE_IDENTITY();
+        SET @nuevo_folio = 'PENDIENTE';
+ 
+        COMMIT TRANSACTION;
+ 
+        PRINT 'Sustitucion registrada. Folio anterior: ' + @folio_anterior;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+ 
+ 
+-- Issue 15  TRIGGER: tg_no_repudio_cert (no repudio)
+CREATE OR ALTER TRIGGER tg_no_repudio_cert
+ON certificacion_emitida
+AFTER UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+ 
+    IF EXISTS (SELECT 1 FROM deleted) AND NOT EXISTS (SELECT 1 FROM inserted)
+    BEGIN
+        RAISERROR('No se permite eliminar certificaciones emitidas. Utilice sp_anular_certificacion.', 16, 1);
+        ROLLBACK TRANSACTION;
+        RETURN;
+    END;
+ 
+    IF UPDATE(folio_unico) OR UPDATE(hash_seguridad)
+       OR UPDATE(id_asambleista) OR UPDATE(fecha_emision)
+    BEGIN
+        IF NOT EXISTS (
+            SELECT 1
+            FROM deleted d
+            INNER JOIN inserted i ON d.id_certificacion = i.id_certificacion
+            WHERE d.folio_unico = 'PENDIENTE' AND i.folio_unico <> 'PENDIENTE'
+        )
+        BEGIN
+            RAISERROR('Los campos folio_unico, hash_seguridad, id_asambleista y fecha_emision son inmutables despues de la emision.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+    END;
+END;
+GO
+ 
+-- FIN ISSUE #15
+ 
+ 
+-- 8.6  DATOS SEMILLA - ISSUE #10 PARTE II
+-- Responsable: Josue
+-- Demuestra el flujo completo del proceso legislativo:
+-- 1. Dos sesiones (ordinaria y extraordinaria)
+-- 2. Una propuesta base + una conciliada (recursion)
+-- 3. Dos proponentes (autoria multiple N:M)
+-- 4. Un punto de agenda
+-- 5. Una resolucion_propuesta oficial
+-- 6. Una reforma_aplicada que apunta al Articulo 18
+-- 7. Asistencia a la sesion ordinaria
+ 
 DECLARE @ts_ordinaria      INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='TIPO_SESION'       AND nombre='Ordinaria');
 DECLARE @ts_extraordinaria INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='TIPO_SESION'       AND nombre='Extraordinaria');
 DECLARE @mod_presencial    INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='TIPO_MODALIDAD'    AND nombre='Presencial');
@@ -1049,38 +1442,37 @@ DECLARE @mayoria_calif     INT = (SELECT id_item FROM catalogo_maestro WHERE gru
 DECLARE @tipo_modif        INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='TIPO_REFORMA'      AND nombre='Modificacion');
 DECLARE @est_asist_pres    INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='ESTADO_ASISTENCIA' AND nombre='Presente');
 DECLARE @est_asist_aus     INT = (SELECT id_item FROM catalogo_maestro WHERE grupo_catalogo='ESTADO_ASISTENCIA' AND nombre='Ausente');
-
---ids de reglamento y articulo base
+ 
 DECLARE @id_reg_eoitcr INT = (SELECT id_reglamento FROM reglamento WHERE sigla='EOITCR');
 DECLARE @id_art_18 INT = (
     SELECT id_elemento FROM elemento_normativo
     WHERE id_reglamento=@id_reg_eoitcr AND numero_etiqueta='18' AND id_estado_vigencia=1);
-
---ids de asambleistas
+ 
 DECLARE @asamb_ana    INT = (SELECT id_asambleista FROM asambleista WHERE cedula='1-1111-1111');
 DECLARE @asamb_carlos INT = (SELECT id_asambleista FROM asambleista WHERE cedula='2-2222-2222');
 DECLARE @asamb_maria  INT = (SELECT id_asambleista FROM asambleista WHERE cedula='3-3333-3333');
 DECLARE @asamb_jose   INT = (SELECT id_asambleista FROM asambleista WHERE cedula='4-4444-4444');
 DECLARE @asamb_laura  INT = (SELECT id_asambleista FROM asambleista WHERE cedula='5-5555-5555');
-
+ 
 DECLARE @id_admin INT = (SELECT id_usuario FROM sys_usuario WHERE username='admin');
-
---Sesion ordinaria
-INSERT INTO sesiones (numero_sesion, fecha, id_tipo_sesion, id_tipo_modalidad, quorum_requerido)
-VALUES ('AIR-110-2024', '2024-09-25', @ts_ordinaria, @mod_presencial, 100);
+ 
+-- Sesion ordinaria (tabla 'sesion' de Frank, Issue #11)
+INSERT INTO sesion (numero_sesion, fecha_sesion, id_tipo_sesion, quorum_requerido, total_convocados)
+VALUES ('AIR-110-2024', '2024-09-25T09:00:00', @ts_ordinaria, 100, 150);
 DECLARE @id_sesion1 INT = SCOPE_IDENTITY();
-
---Sesion extraordinaria
-INSERT INTO sesiones (numero_sesion, fecha, id_tipo_sesion, id_tipo_modalidad, quorum_requerido)
-VALUES ('AIR-111-2024', '2024-10-15', @ts_extraordinaria, @mod_virtual, 100);
-
---Acta de la sesion ordinaria
-INSERT INTO acta (id_sesion, fecha_aprobacion, url_documento, observaciones)
-VALUES (@id_sesion1, '2024-10-15',
+ 
+-- Sesion extraordinaria
+INSERT INTO sesion (numero_sesion, fecha_sesion, id_tipo_sesion, quorum_requerido, total_convocados)
+VALUES ('AIR-111-2024', '2024-10-15T09:00:00', @ts_extraordinaria, 100, 150);
+ 
+-- Acta de la sesion ordinaria
+INSERT INTO acta (id_sesion, id_tipo_modalidad, fecha_aprobacion, url_documento, link_acta, observaciones)
+VALUES (@id_sesion1, @mod_presencial, '2024-10-15',
+        'https://tec.cr/air/actas/AIR-110-2024.pdf',
         'https://tec.cr/air/actas/AIR-110-2024.pdf',
         'Acta aprobada en la sesion AIR-111-2024.');
-
---Propuesta base
+ 
+-- Propuesta base
 INSERT INTO propuesta (codigo_air, titulo, texto_sustitutivo, id_reglamento_base,
                        id_propuesta_padre, id_etapa_propuesta, id_estado_propuesta,
                        id_tipo_mayoria_requerida, link_documentacion)
@@ -1090,8 +1482,8 @@ VALUES ('AIR-99-2024',
         @id_reg_eoitcr, NULL, @etapa_aprobacion, @estado_aprobada, @mayoria_calif,
         'https://tec.cr/air/propuestas/AIR-99-2024.pdf');
 DECLARE @id_prop_base INT = SCOPE_IDENTITY();
-
---Propuesta conciliada (hereda de la base via id_propuesta_padre)
+ 
+-- Propuesta conciliada (recursividad)
 INSERT INTO propuesta (codigo_air, titulo, texto_sustitutivo, id_reglamento_base,
                        id_propuesta_padre, id_etapa_propuesta, id_estado_propuesta,
                        id_tipo_mayoria_requerida, link_documentacion)
@@ -1100,38 +1492,38 @@ VALUES ('AIR-99-CONC-2024',
         'Texto conciliado tras el analisis en comision.',
         @id_reg_eoitcr, @id_prop_base, @etapa_aprobacion, @estado_endisc, @mayoria_calif,
         'https://tec.cr/air/propuestas/AIR-99-CONC-2024.pdf');
-
---Proponentes (autoria multiple N:M)
+ 
+-- Proponentes (autoria multiple N:M)
 INSERT INTO proponente_propuesta (id_propuesta, id_asambleista) VALUES
     (@id_prop_base, @asamb_ana),
     (@id_prop_base, @asamb_carlos);
-
---Bitacora del cambio de estado a 'Aprobada'
+ 
+-- Bitacora del cambio de estado a 'Aprobada'
 INSERT INTO bitacora_propuesta (id_propuesta, id_reglamento_base, id_etapa_propuesta,
                                 id_estado_propuesta, titulo, codigo_air, usuario_modificacion)
 VALUES (@id_prop_base, @id_reg_eoitcr, @etapa_aprobacion, @estado_aprobada,
         'Reforma al Articulo 18 del Estatuto Organico - Inclusion de criterios de equidad',
         'AIR-99-2024', @id_admin);
-
---Punto de agenda
+ 
+-- Punto de agenda
 INSERT INTO punto_agenda (id_sesion, id_propuesta, orden, descripcion)
 VALUES (@id_sesion1, @id_prop_base, 1, 'Discusion y votacion de la propuesta AIR-99-2024.');
 DECLARE @id_punto1 INT = SCOPE_IDENTITY();
-
---Resolucion oficial
-INSERT INTO resolucion (id_punto_agenda, numero_resolucion, fecha_emision)
+ 
+-- Resolucion oficial de la propuesta
+INSERT INTO resolucion_propuesta (id_punto_agenda, numero_resolucion, fecha_emision)
 VALUES (@id_punto1, 'AIR-RES-001-2024', '2024-09-25');
-DECLARE @id_resolucion1 INT = SCOPE_IDENTITY();
-
---Reforma aplicada (conecta resolucion con articulo 18)
-INSERT INTO reforma_aplicada (id_resolucion, id_elemento_normativo, id_tipo_reforma,
+DECLARE @id_resprop1 INT = SCOPE_IDENTITY();
+ 
+-- Reforma aplicada (conecta resolucion_propuesta con articulo 18)
+INSERT INTO reforma_aplicada (id_resolucion_propuesta, id_elemento_normativo, id_tipo_reforma,
                               texto_anterior, texto_nuevo, fecha_inicio_vigencia)
-VALUES (@id_resolucion1, @id_art_18, @tipo_modif,
+VALUES (@id_resprop1, @id_art_18, @tipo_modif,
         'La Asamblea Institucional Representativa es el organo de mayor jerarquia del Instituto.',
         'La Asamblea Institucional Representativa es el organo de mayor jerarquia del Instituto, con responsabilidad sobre la equidad institucional y la sostenibilidad academica.',
         '2024-09-25');
-
---Asistencia: 4 presentes, 1 ausente (cumple el quorum requerido)
+ 
+-- Asistencia (tabla de Frank, Issue #11): 4 presentes, 1 ausente
 INSERT INTO asistencia_sesion_plenaria (id_sesion, id_asambleista, id_estado_asistencia) VALUES
     (@id_sesion1, @asamb_ana,    @est_asist_pres),
     (@id_sesion1, @asamb_carlos, @est_asist_pres),
@@ -1139,7 +1531,8 @@ INSERT INTO asistencia_sesion_plenaria (id_sesion, id_asambleista, id_estado_asi
     (@id_sesion1, @asamb_jose,   @est_asist_aus),
     (@id_sesion1, @asamb_laura,  @est_asist_pres);
 GO
-
+ 
+ 
 --FIN DEL SCRIPT proyecto-air.sql 
 PRINT 'proyecto-air.sql ejecutado correctamente.';
 GO

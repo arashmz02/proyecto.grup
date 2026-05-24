@@ -22,22 +22,19 @@
     </style>
 </head>
 <body>
-
 <a href="${pageContext.request.contextPath}/sesiones">&larr; Volver al listado</a>
-
 <h1>Sesion ${sesion.numeroSesion}</h1>
-
 <c:if test="${param.asistencia == '1'}">
     <div class="alert-success">Asistencia registrada.</div>
 </c:if>
 <c:if test="${param.agendaAgregada == '1'}">
     <div class="alert-success">Propuesta agregada a la agenda.</div>
 </c:if>
-
 <div class="card">
     <h2>Datos generales</h2>
-    <p><strong>Fecha:</strong> ${sesion.fecha}</p>
+    <p><strong>Fecha:</strong> ${sesion.fechaSesion}</p>
     <p><strong>Quorum requerido:</strong> ${sesion.quorumRequerido}</p>
+    <p><strong>Total convocados:</strong> ${sesion.totalConvocados}</p>
     <p><strong>Presentes registrados:</strong> <span class="stat">${presentes}</span></p>
     <c:choose>
         <c:when test="${presentes >= sesion.quorumRequerido}">
@@ -48,7 +45,6 @@
         </c:otherwise>
     </c:choose>
 </div>
-
 <div class="card">
     <h2>Asistencia</h2>
     <table>
@@ -85,6 +81,5 @@
         </tbody>
     </table>
 </div>
-
 </body>
 </html>

@@ -19,41 +19,38 @@
     </style>
 </head>
 <body>
-
 <h1>Sesiones de la AIR</h1>
-
 <c:if test="${param.creado == '1'}">
     <div class="alert-success">Sesion registrada exitosamente.</div>
 </c:if>
-
 <c:if test="${not empty error}">
     <div class="alert-error">${error}</div>
 </c:if>
-
 <p>
     <a href="${pageContext.request.contextPath}/sesiones/nueva" class="btn">+ Nueva Sesion</a>
 </p>
-
 <table>
     <thead>
         <tr>
             <th>Numero</th>
             <th>Fecha</th>
-            <th>Quorum requerido</th>
+            <th>Quorum</th>
+            <th>Convocados</th>
             <th>Acciones</th>
         </tr>
     </thead>
     <tbody>
         <c:choose>
             <c:when test="${empty sesiones}">
-                <tr><td colspan="4" style="text-align: center; color: #999;">No hay sesiones registradas.</td></tr>
+                <tr><td colspan="5" style="text-align: center; color: #999;">No hay sesiones registradas.</td></tr>
             </c:when>
             <c:otherwise>
                 <c:forEach var="s" items="${sesiones}">
                     <tr>
                         <td><strong>${s.numeroSesion}</strong></td>
-                        <td>${s.fecha}</td>
+                        <td>${s.fechaSesion}</td>
                         <td>${s.quorumRequerido}</td>
+                        <td>${s.totalConvocados}</td>
                         <td>
                             <a href="${pageContext.request.contextPath}/sesiones/detalle?id=${s.idSesion}">Ver detalle</a>
                         </td>
@@ -63,6 +60,5 @@
         </c:choose>
     </tbody>
 </table>
-
 </body>
 </html>

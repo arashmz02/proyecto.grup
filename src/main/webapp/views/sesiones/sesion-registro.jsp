@@ -19,15 +19,11 @@
     </style>
 </head>
 <body>
-
 <h1>Registrar Nueva Sesion</h1>
-
 <c:if test="${not empty error}">
     <div class="alert-error">${error}</div>
 </c:if>
-
 <form method="POST" action="${pageContext.request.contextPath}/sesiones/nueva">
-
     <label>Numero de sesion:</label>
     <input type="text" name="numeroSesion" value="${numeroSesionPrev}" placeholder="AIR-110-2024" required>
     <div class="help">Formato: AIR-NNN-AAAA</div>
@@ -43,8 +39,8 @@
         </c:forEach>
     </select>
 
-    <label>Modalidad:</label>
-    <select name="idTipoModalidad" required>
+    <label>Modalidad (opcional, se guarda en el acta):</label>
+    <select name="idTipoModalidad">
         <option value="">-- Seleccione --</option>
         <c:forEach var="m" items="${modalidades}">
             <option value="${m.id}" <c:if test="${idTipoModalidadPrev == m.id}">selected</c:if>>${m.nombre}</option>
@@ -52,11 +48,19 @@
     </select>
 
     <label>Quorum requerido:</label>
-    <input type="number" name="quorumRequerido" value="${quorumPrev}" min="0" required>
+    <input type="number" name="quorumRequerido" value="${quorumPrev}" min="1" required>
+    <div class="help">Cantidad minima de asistentes para sesionar.</div>
+
+    <label>Total de convocados:</label>
+    <input type="number" name="totalConvocados" value="${totalConvocadosPrev}" min="1" required>
+    <div class="help">Total de asambleistas convocados (debe ser >= quorum).</div>
+
+    <label>Link del acta (opcional):</label>
+    <input type="text" name="linkActa" value="${linkActaPrev}" placeholder="https://...">
+    <div class="help">URL del documento del acta. Se guarda junto con la sesion.</div>
 
     <button type="submit" class="btn">Guardar</button>
     <a href="${pageContext.request.contextPath}/sesiones" class="btn btn-secondary" style="text-decoration: none; display: inline-block;">Cancelar</a>
 </form>
-
 </body>
 </html>
