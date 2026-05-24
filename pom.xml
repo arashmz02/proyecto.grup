@@ -2,40 +2,31 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-
     <modelVersion>4.0.0</modelVersion>
-
     <groupId>cr.ac.itcr</groupId>
     <artifactId>sgl-air</artifactId>
     <version>1.0-sprint2</version>
     <packaging>war</packaging>
-
     <name>Sistema de Gestion Legislativa AIR</name>
-
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
-
     <dependencies>
-
-        <!-- Driver JDBC para conectarse a Azure SQL Database (SQL Server) -->
+        <!--Driver JDBC para conectarse a Azure SQL Database (SQL Server) -->
         <dependency>
             <groupId>com.microsoft.sqlserver</groupId>
             <artifactId>mssql-jdbc</artifactId>
             <version>12.8.1.jre11</version>
         </dependency>
-
-        <!-- jBCrypt: hashing de contrasenas con BCrypt (Issue #0) -->
+        <!--jBCrypt: hashing de contrasenas con BCrypt (Issue #0) -->
         <dependency>
             <groupId>org.mindrot</groupId>
             <artifactId>jbcrypt</artifactId>
             <version>0.4</version>
         </dependency>
-
-        <!-- API de Servlets y JSP. 'provided' porque las aporta el
-             servidor (Tomcat). No se empaquetan en el .war -->
+        <!--API de Servlets y JSP. 'provided' porque las aporta el servidor (Tomcat). No se empaquetan en el .war -->
         <dependency>
             <groupId>jakarta.servlet</groupId>
             <artifactId>jakarta.servlet-api</artifactId>
@@ -48,7 +39,6 @@
             <version>3.1.1</version>
             <scope>provided</scope>
         </dependency>
-
         <!-- JSTL: etiquetas utiles para las vistas JSP -->
         <dependency>
             <groupId>org.glassfish.web</groupId>
@@ -61,9 +51,13 @@
             <artifactId>gson</artifactId>
             <version>2.11.0</version>
         </dependency>
-
+        <!-- Apache POI: exportacion a Excel (.xlsx) - Issue #16 Josue -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.2.5</version>
+        </dependency>
     </dependencies>
-
     <build>
         <finalName>sgl-air</finalName>
         <plugins>
@@ -74,13 +68,4 @@
             </plugin>
         </plugins>
     </build>
-
-    <!--Apache POI: exportación a Excel (.xlsx) — Issue #16 Josué -->
-<dependency>
-    <groupId>org.apache.poi</groupId>
-    <artifactId>poi-ooxml</artifactId>
-    <version>5.2.5</version>
-</dependency>
-
 </project>
-
