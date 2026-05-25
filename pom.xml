@@ -39,19 +39,19 @@
             <version>3.1.1</version>
             <scope>provided</scope>
         </dependency>
-        <!-- JSTL: etiquetas utiles para las vistas JSP -->
+        <!--JSTL: etiquetas utiles para las vistas JSP -->
         <dependency>
             <groupId>org.glassfish.web</groupId>
             <artifactId>jakarta.servlet.jsp.jstl</artifactId>
             <version>3.0.1</version>
         </dependency>
-        <!-- Gson: serializacion JSON (necesario para NormativaServlet de Josue) -->
+        <!--Gson: serializacion JSON -->
         <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
             <version>2.11.0</version>
         </dependency>
-        <!-- Apache POI: exportacion a Excel (.xlsx) - Issue #16 Josue -->
+        <!--Apache POI: exportacion a Excel (.xlsx) - Issue #16 -->
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml</artifactId>
