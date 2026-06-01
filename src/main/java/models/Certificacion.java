@@ -1,4 +1,4 @@
-package models;
+﻿package models;
 
 public class Certificacion {
 
@@ -11,6 +11,14 @@ public class Certificacion {
     private String resumenAsistencia;
     private String notaCondicional;
     private String fechaEmision;
+
+    // ====== Issue #15: Anulaciones y Sustituciones (Frank) ======
+    private Integer idEstado;
+    private String  nombreEstado;
+    private String  motivoAnulacion;
+    private String  fechaAnulacion;
+    private Integer usuarioAnulacion;
+    private Integer idCertificacionSustituye;
 
     public Certificacion() {
     }
@@ -86,4 +94,29 @@ public class Certificacion {
     public void setFechaEmision(String fechaEmision) {
         this.fechaEmision = fechaEmision;
     }
+
+    // ====== Getters y setters del Issue #15 (Frank) ======
+    public Integer getIdEstado() { return idEstado; }
+    public void setIdEstado(Integer idEstado) { this.idEstado = idEstado; }
+
+    public String getNombreEstado() { return nombreEstado; }
+    public void setNombreEstado(String nombreEstado) { this.nombreEstado = nombreEstado; }
+
+    public String getMotivoAnulacion() { return motivoAnulacion; }
+    public void setMotivoAnulacion(String motivoAnulacion) { this.motivoAnulacion = motivoAnulacion; }
+
+    public String getFechaAnulacion() { return fechaAnulacion; }
+    public void setFechaAnulacion(String fechaAnulacion) { this.fechaAnulacion = fechaAnulacion; }
+
+    public Integer getUsuarioAnulacion() { return usuarioAnulacion; }
+    public void setUsuarioAnulacion(Integer usuarioAnulacion) { this.usuarioAnulacion = usuarioAnulacion; }
+
+    public Integer getIdCertificacionSustituye() { return idCertificacionSustituye; }
+    public void setIdCertificacionSustituye(Integer idCertificacionSustituye) {
+        this.idCertificacionSustituye = idCertificacionSustituye;
+    }
+
+    public boolean estaActiva()      { return idEstado != null && idEstado == 37; }
+    public boolean estaAnulada()     { return idEstado != null && idEstado == 38; }
+    public boolean estaSustituida()  { return idEstado != null && idEstado == 39; }
 }
