@@ -1,4 +1,4 @@
-﻿package controllers;
+package controllers;
 
 import models.Certificacion;
 import models.CertificacionAnulacionDAO;
