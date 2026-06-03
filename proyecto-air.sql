@@ -1586,3 +1586,51 @@ INNER JOIN catalogo_maestro cm_est
 INNER JOIN asambleista a
         ON a.id_asambleista = asp.id_asambleista;
 -- FIN ISSUE #11: v_asistencia
+
+-- ============================================================
+-- ISSUE #11: tg_validar_quorum - Trigger de validacion de quorum
+-- Se dispara INSTEAD OF INSERT en voto.
+-- Rechaza el voto si los presentes son menores al quorum_requerido.
+-- ============================================================
+CREATE OR ALTER TRIGGER tg_validar_quorum
+ON voto
+INSTEAD OF INSERT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @idVotacion INT;
+    DECLARE @idSesion   INT;
+    DECLARE @presentes  INT;
+    DECLARE @requerido  INT;
+
+    SELECT @idVotacion = i.id_votacion FROM inserted i;
+
+    SELECT @idSesion = v.id_sesion
+    FROM votacion v WHERE v.id_votacion = @idVotacion;
+
+    SELECT @presentes = COUNT(*)
+    FROM asistencia_sesion_plenaria asp
+    INNER JOIN catalogo_maestro cm
+           ON cm.id_item = asp.id_estado_asistencia
+          AND cm.grupo_catalogo = 'ESTADO_ASISTENCIA'
+          AND cm.nombre = 'Presente'
+    WHERE asp.id_sesion = @idSesion;
+
+    SELECT @requerido = s.quorum_requerido
+    FROM sesion s WHERE s.id_sesion = @idSesion;
+
+    IF @presentes < @requerido
+    BEGIN
+        RAISERROR(
+            'Quorum insuficiente: hay %d presentes pero se requieren %d para votar.',
+            16, 1, @presentes, @requerido
+        );
+        RETURN;
+    END
+
+    INSERT INTO voto (id_votacion, id_asambleista, id_sentido_voto, fecha_voto)
+    SELECT i.id_votacion, i.id_asambleista, i.id_sentido_voto, i.fecha_voto
+    FROM inserted i;
+END;
+-- FIN ISSUE #11: tg_validar_quorum
