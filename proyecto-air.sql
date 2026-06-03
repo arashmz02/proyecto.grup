@@ -1535,4 +1535,38 @@ GO
  
 --FIN DEL SCRIPT proyecto-air.sql 
 PRINT 'proyecto-air.sql ejecutado correctamente.';
+GOGO
+
+
+-- ============================================================
+-- ISSUE #13: fn_generar_hash_sha256 - Funcion hash SHA-256
+-- Consumida por Arash en el motor PDF (#17) para no repudio.
+-- Uso: SELECT dbo.fn_generar_hash_sha256('texto')
+-- ============================================================
+CREATE OR ALTER FUNCTION dbo.fn_generar_hash_sha256
+(
+    @contenido NVARCHAR(MAX)
+)
+RETURNS NVARCHAR(64)
+AS
+BEGIN
+    RETURN LOWER(CONVERT(NVARCHAR(64),
+        HASHBYTES('SHA2_256', @contenido), 2));
+END;
+-- FIN ISSUE #13: fn_generar_hash_sha256
+
+-- ============================================================
+-- ISSUE #13: tg_auditoria_total - Triggers de auditoria sobre 6 tablas criticas
+-- ============================================================
+CREATE OR ALTER TRIGGER tg_auditoria_asambleista ON asambleista AFTER INSERT, UPDATE, DELETE AS BEGIN SET NOCOUNT ON; DECLARE @accion NVARCHAR(10); IF EXISTS (SELECT 1 FROM inserted) AND EXISTS (SELECT 1 FROM deleted) SET @accion = 'UPDATE'; ELSE IF EXISTS (SELECT 1 FROM inserted) SET @accion = 'INSERT'; ELSE SET @accion = 'DELETE'; DECLARE @id INT = COALESCE((SELECT TOP 1 id_asambleista FROM inserted),(SELECT TOP 1 id_asambleista FROM deleted)); INSERT INTO seguridad_log (id_usuario,accion,tabla_consultada,registro_id,ip_origen,fecha_evento,detalle) VALUES (TRY_CAST(SESSION_CONTEXT(N'usuario_id') AS INT),@accion,'asambleista',@id,'0.0.0.0',SYSUTCDATETIME(),'Auditoria automatica'); END;
 GO
+CREATE OR ALTER TRIGGER tg_auditoria_certificacion ON certificacion_emitida AFTER INSERT, UPDATE, DELETE AS BEGIN SET NOCOUNT ON; DECLARE @accion NVARCHAR(10); IF EXISTS (SELECT 1 FROM inserted) AND EXISTS (SELECT 1 FROM deleted) SET @accion = 'UPDATE'; ELSE IF EXISTS (SELECT 1 FROM inserted) SET @accion = 'INSERT'; ELSE SET @accion = 'DELETE'; DECLARE @id INT = COALESCE((SELECT TOP 1 id_certificacion FROM inserted),(SELECT TOP 1 id_certificacion FROM deleted)); INSERT INTO seguridad_log (id_usuario,accion,tabla_consultada,registro_id,ip_origen,fecha_evento,detalle) VALUES (TRY_CAST(SESSION_CONTEXT(N'usuario_id') AS INT),@accion,'certificacion_emitida',@id,'0.0.0.0',SYSUTCDATETIME(),'Auditoria automatica'); END;
+GO
+CREATE OR ALTER TRIGGER tg_auditoria_resolucion ON resolucion AFTER INSERT, UPDATE, DELETE AS BEGIN SET NOCOUNT ON; DECLARE @accion NVARCHAR(10); IF EXISTS (SELECT 1 FROM inserted) AND EXISTS (SELECT 1 FROM deleted) SET @accion = 'UPDATE'; ELSE IF EXISTS (SELECT 1 FROM inserted) SET @accion = 'INSERT'; ELSE SET @accion = 'DELETE'; DECLARE @id INT = COALESCE((SELECT TOP 1 id_resolucion FROM inserted),(SELECT TOP 1 id_resolucion FROM deleted)); INSERT INTO seguridad_log (id_usuario,accion,tabla_consultada,registro_id,ip_origen,fecha_evento,detalle) VALUES (TRY_CAST(SESSION_CONTEXT(N'usuario_id') AS INT),@accion,'resolucion',@id,'0.0.0.0',SYSUTCDATETIME(),'Auditoria automatica'); END;
+GO
+CREATE OR ALTER TRIGGER tg_auditoria_sesion ON sesion AFTER INSERT, UPDATE, DELETE AS BEGIN SET NOCOUNT ON; DECLARE @accion NVARCHAR(10); IF EXISTS (SELECT 1 FROM inserted) AND EXISTS (SELECT 1 FROM deleted) SET @accion = 'UPDATE'; ELSE IF EXISTS (SELECT 1 FROM inserted) SET @accion = 'INSERT'; ELSE SET @accion = 'DELETE'; DECLARE @id INT = COALESCE((SELECT TOP 1 id_sesion FROM inserted),(SELECT TOP 1 id_sesion FROM deleted)); INSERT INTO seguridad_log (id_usuario,accion,tabla_consultada,registro_id,ip_origen,fecha_evento,detalle) VALUES (TRY_CAST(SESSION_CONTEXT(N'usuario_id') AS INT),@accion,'sesion',@id,'0.0.0.0',SYSUTCDATETIME(),'Auditoria automatica'); END;
+GO
+CREATE OR ALTER TRIGGER tg_auditoria_voto ON voto AFTER INSERT, UPDATE, DELETE AS BEGIN SET NOCOUNT ON; DECLARE @accion NVARCHAR(10); IF EXISTS (SELECT 1 FROM inserted) AND EXISTS (SELECT 1 FROM deleted) SET @accion = 'UPDATE'; ELSE IF EXISTS (SELECT 1 FROM inserted) SET @accion = 'INSERT'; ELSE SET @accion = 'DELETE'; DECLARE @id INT = COALESCE((SELECT TOP 1 id_voto FROM inserted),(SELECT TOP 1 id_voto FROM deleted)); INSERT INTO seguridad_log (id_usuario,accion,tabla_consultada,registro_id,ip_origen,fecha_evento,detalle) VALUES (TRY_CAST(SESSION_CONTEXT(N'usuario_id') AS INT),@accion,'voto',@id,'0.0.0.0',SYSUTCDATETIME(),'Auditoria automatica'); END;
+GO
+CREATE OR ALTER TRIGGER tg_auditoria_votacion ON votacion AFTER INSERT, UPDATE, DELETE AS BEGIN SET NOCOUNT ON; DECLARE @accion NVARCHAR(10); IF EXISTS (SELECT 1 FROM inserted) AND EXISTS (SELECT 1 FROM deleted) SET @accion = 'UPDATE'; ELSE IF EXISTS (SELECT 1 FROM inserted) SET @accion = 'INSERT'; ELSE SET @accion = 'DELETE'; DECLARE @id INT = COALESCE((SELECT TOP 1 id_votacion FROM inserted),(SELECT TOP 1 id_votacion FROM deleted)); INSERT INTO seguridad_log (id_usuario,accion,tabla_consultada,registro_id,ip_origen,fecha_evento,detalle) VALUES (TRY_CAST(SESSION_CONTEXT(N'usuario_id') AS INT),@accion,'votacion',@id,'0.0.0.0',SYSUTCDATETIME(),'Auditoria automatica'); END;
+-- FIN ISSUE #13: tg_auditoria_total
