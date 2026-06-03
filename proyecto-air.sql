@@ -1338,3 +1338,20 @@ GO
 
 -- ============================================================
 -- FIN ISSUE #13
+
+-- ============================================================
+-- ISSUE #13: fn_generar_hash_sha256 - Funcion hash SHA-256
+-- Consumida por Arash en el motor PDF (#17) para no repudio.
+-- Uso: SELECT dbo.fn_generar_hash_sha256('texto')
+-- ============================================================
+CREATE OR ALTER FUNCTION dbo.fn_generar_hash_sha256
+(
+    @contenido NVARCHAR(MAX)
+)
+RETURNS NVARCHAR(64)
+AS
+BEGIN
+    RETURN LOWER(CONVERT(NVARCHAR(64),
+        HASHBYTES('SHA2_256', @contenido), 2));
+END;
+-- FIN ISSUE #13: fn_generar_hash_sha256
