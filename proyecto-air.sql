@@ -1536,3 +1536,53 @@ GO
 --FIN DEL SCRIPT proyecto-air.sql 
 PRINT 'proyecto-air.sql ejecutado correctamente.';
 GO
+-- ============================================================
+-- ISSUE #11: v_asistencia - Vista agregada de asistencia
+-- Consumida por: Arash (#8) y Josue (#5)
+-- ============================================================
+CREATE OR ALTER VIEW v_asistencia AS
+SELECT
+    s.id_sesion,
+    s.numero_sesion,
+    CONVERT(VARCHAR(10), s.fecha_sesion, 23)  AS fecha_sesion,
+    cm_tipo.nombre                             AS tipo_sesion,
+    a.id_asambleista,
+    a.nombre                                   AS nombre_asambleista,
+    a.cedula,
+    cm_est.nombre                              AS estado_asistencia,
+    s.total_convocados,
+    s.quorum_requerido,
+    (
+        SELECT COUNT(*)
+        FROM asistencia_sesion_plenaria asp2
+        INNER JOIN catalogo_maestro cm2
+               ON cm2.id_item = asp2.id_estado_asistencia
+              AND cm2.grupo_catalogo = 'ESTADO_ASISTENCIA'
+              AND cm2.nombre = 'Presente'
+        WHERE asp2.id_sesion = s.id_sesion
+    )                                          AS total_presentes,
+    CASE
+        WHEN s.total_convocados > 0
+        THEN CAST(
+            (
+                SELECT COUNT(*) * 100.0
+                FROM asistencia_sesion_plenaria asp3
+                INNER JOIN catalogo_maestro cm3
+                       ON cm3.id_item = asp3.id_estado_asistencia
+                      AND cm3.grupo_catalogo = 'ESTADO_ASISTENCIA'
+                      AND cm3.nombre = 'Presente'
+                WHERE asp3.id_sesion = s.id_sesion
+            ) / s.total_convocados
+        AS DECIMAL(5,2))
+        ELSE 0
+    END                                        AS porcentaje_asistencia
+FROM sesion s
+INNER JOIN catalogo_maestro cm_tipo
+        ON cm_tipo.id_item = s.id_tipo_sesion
+INNER JOIN asistencia_sesion_plenaria asp
+        ON asp.id_sesion = s.id_sesion
+INNER JOIN catalogo_maestro cm_est
+        ON cm_est.id_item = asp.id_estado_asistencia
+INNER JOIN asambleista a
+        ON a.id_asambleista = asp.id_asambleista;
+-- FIN ISSUE #11: v_asistencia
