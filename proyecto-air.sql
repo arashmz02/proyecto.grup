@@ -1536,3 +1536,97 @@ GO
 --FIN DEL SCRIPT proyecto-air.sql 
 PRINT 'proyecto-air.sql ejecutado correctamente.';
 GO
+-- ============================================================
+-- ISSUE #12: sp_calcular_resultado_votacion - Motor de Votaciones
+-- Aplica mayoria simple (50%+1) o calificada (66%) sobre presentes.
+-- CRITICO: el 66% se calcula sobre presentes, NO sobre total historico.
+-- ============================================================
+CREATE OR ALTER PROCEDURE sp_calcular_resultado_votacion
+    @idVotacion INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @idSesion          INT;
+    DECLARE @idTipoMayoria     INT;
+    DECLARE @nombreMayoria     NVARCHAR(100);
+    DECLARE @presentes         INT;
+    DECLARE @votosFavor        INT;
+    DECLARE @votosContra       INT;
+    DECLARE @votosAbstencion   INT;
+    DECLARE @umbral            DECIMAL(5,2);
+    DECLARE @aprobada          BIT;
+    DECLARE @idEstadoAprobada  INT;
+    DECLARE @idEstadoRechazada INT;
+
+    SELECT
+        @idSesion          = v.id_sesion,
+        @idTipoMayoria     = v.id_tipo_mayoria,
+        @votosFavor        = v.votos_favor,
+        @votosContra       = v.votos_contra,
+        @votosAbstencion   = v.votos_abstencion
+    FROM votacion v
+    WHERE v.id_votacion = @idVotacion;
+
+    IF @idSesion IS NULL
+    BEGIN
+        RAISERROR('Votacion %d no encontrada.', 16, 1, @idVotacion);
+        RETURN;
+    END
+
+    SELECT @nombreMayoria = cm.nombre
+    FROM catalogo_maestro cm
+    WHERE cm.id_item = @idTipoMayoria
+      AND cm.grupo_catalogo = 'TIPO_MAYORIA';
+
+    SELECT @presentes = COUNT(*)
+    FROM asistencia_sesion_plenaria asp
+    INNER JOIN catalogo_maestro cm
+           ON cm.id_item = asp.id_estado_asistencia
+          AND cm.grupo_catalogo = 'ESTADO_ASISTENCIA'
+          AND cm.nombre = 'Presente'
+    WHERE asp.id_sesion = @idSesion;
+
+    IF @presentes = 0
+    BEGIN
+        RAISERROR('No hay presentes registrados en la sesion de esta votacion.', 16, 1);
+        RETURN;
+    END
+
+    IF @nombreMayoria = 'Simple'
+        SET @umbral = (@presentes / 2.0) + 1;
+    ELSE IF @nombreMayoria = 'Calificada'
+        SET @umbral = @presentes * 0.66;
+    ELSE
+    BEGIN
+        RAISERROR('Tipo de mayoria desconocido: %s', 16, 1, @nombreMayoria);
+        RETURN;
+    END
+
+    SET @aprobada = CASE WHEN @votosFavor >= @umbral THEN 1 ELSE 0 END;
+
+    SELECT @idEstadoAprobada  = id_item FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_VOTACION' AND nombre = 'Aprobada';
+
+    SELECT @idEstadoRechazada = id_item FROM catalogo_maestro
+    WHERE grupo_catalogo = 'ESTADO_VOTACION' AND nombre = 'Rechazada';
+
+    UPDATE votacion
+    SET id_estado_votacion = CASE WHEN @aprobada = 1
+                                  THEN @idEstadoAprobada
+                                  ELSE @idEstadoRechazada
+                             END
+    WHERE id_votacion = @idVotacion;
+
+    SELECT
+        @idVotacion        AS id_votacion,
+        @presentes         AS presentes,
+        @votosFavor        AS votos_favor,
+        @votosContra       AS votos_contra,
+        @votosAbstencion   AS votos_abstencion,
+        @umbral            AS umbral_requerido,
+        @nombreMayoria     AS tipo_mayoria,
+        @aprobada          AS aprobada,
+        CASE WHEN @aprobada = 1 THEN 'Aprobada' ELSE 'Rechazada' END AS resultado;
+END;
+-- FIN ISSUE #12: sp_calcular_resultado_votacion
