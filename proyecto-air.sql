@@ -1535,7 +1535,8 @@ GO
  
 --FIN DEL SCRIPT proyecto-air.sql 
 PRINT 'proyecto-air.sql ejecutado correctamente.';
-GOGO
+GO
+GO
 
 
 -- ============================================================
