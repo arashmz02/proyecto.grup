@@ -98,7 +98,7 @@ public class InicioController extends HttpServlet {
                "Registro de asambleistas y sus nombramientos.");
         modulo(out, ctx, "/sesiones", "", "Sesiones Plenarias",
                "Convocatorias, agenda y registro de sesiones.");
-        modulo(out, ctx, "/sesiones/quorum", "", "Control de Quorum",
+        modulo(out, ctx, "/views/sesiones/quorum.jsp", "", "Control de Quorum",
                "Verificacion de quorum y resumen de asistencia (Issue #11).");
         modulo(out, ctx, "/propuestas", "", "Propuestas",
                "Gestion de propuestas de reforma normativa.");

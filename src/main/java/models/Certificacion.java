@@ -116,7 +116,7 @@ public class Certificacion {
         this.idCertificacionSustituye = idCertificacionSustituye;
     }
 
-    public boolean estaActiva()      { return idEstado != null && idEstado == 37; }
-    public boolean estaAnulada()     { return idEstado != null && idEstado == 38; }
-    public boolean estaSustituida()  { return idEstado != null && idEstado == 39; }
+    public boolean estaActiva()      { return idEstado != null && idEstado == 51; }
+    public boolean estaAnulada()     { return idEstado != null && idEstado == 52; }
+    public boolean estaSustituida()  { return idEstado != null && idEstado == 53; }
 }

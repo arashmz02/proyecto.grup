@@ -114,7 +114,7 @@ public class BitacoraController extends HttpServlet {
         StringBuilder sql = new StringBuilder(
             "SELECT TOP (" + limit + ") " +
             "  l.id_log, " +
-            "  l.id_certificacion_emitida, " +
+            "  l.id_certificacion, " +
             "  ce.folio_unico, " +
             "  cm.nombre AS accion, " +
             "  l.id_usuario, " +
@@ -125,7 +125,7 @@ public class BitacoraController extends HttpServlet {
             "  l.snapshot_json " +
             "FROM log_certificacion_emitida l " +
             "LEFT JOIN certificacion_emitida ce " +
-            "       ON ce.id_certificacion = l.id_certificacion_emitida " +
+            "       ON ce.id_certificacion = l.id_certificacion " +
             "LEFT JOIN catalogo_maestro cm " +
             "       ON cm.id_item = l.id_accion " +
             "LEFT JOIN sys_usuario u " +
