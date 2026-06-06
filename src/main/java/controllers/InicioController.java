@@ -126,7 +126,7 @@ public class InicioController extends HttpServlet {
         out.println("<div class='tarjeta'>");
         out.println("<h2>Auditoria y Reportes</h2>");
         out.println("<div class='modulos'>");
-        modulo(out, ctx, "/bitacora/certificaciones", "gris", "Bitacora de Auditoria",
+        modulo(out, ctx, "/views/certificaciones/bitacora.jsp", "gris", "Bitacora de Auditoria",
                "Trazabilidad de cambios con sello de tiempo y hash (Issue #13).");
         modulo(out, ctx, "/reportes/dashboard", "gris", "Dashboard de Reportes",
                "Indicadores y estadisticas del sistema.");
