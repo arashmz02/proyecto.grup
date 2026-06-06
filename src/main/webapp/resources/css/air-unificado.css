@@ -1,0 +1,14 @@
+:root{
+  --air-azul:#1f2d3d; --air-acento:#2980b9; --air-acento-hover:#2471a3;
+  --air-fondo:#ecf0f1; --air-texto:#2c3e50; --air-borde:#d5dbdb;
+}
+body{ font-family:'Segoe UI',Tahoma,sans-serif; background:var(--air-fondo); color:var(--air-texto); margin:0; }
+h1,h2,h3{ color:var(--air-azul); }
+a{ color:var(--air-acento); }
+table{ border-collapse:collapse; width:100%; background:#fff; }
+th{ background:var(--air-azul); color:#fff; text-align:left; padding:10px 12px; }
+td{ padding:9px 12px; border-bottom:1px solid var(--air-borde); }
+tr:nth-child(even) td{ background:#f7f9f9; }
+input,select,textarea{ padding:9px; border:1px solid var(--air-borde); border-radius:4px; font-family:inherit; font-size:0.95rem; }
+button, input[type=submit], .btn{ background:var(--air-acento); color:#fff; border:none; padding:9px 18px; border-radius:4px; cursor:pointer; font-size:0.95rem; }
+button:hover, input[type=submit]:hover, .btn:hover{ background:var(--air-acento-hover); }
