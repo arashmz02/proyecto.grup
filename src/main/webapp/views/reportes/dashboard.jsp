@@ -9,17 +9,10 @@
           href="${pageContext.request.contextPath}/resources/css/certificacion.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js">
     </script>
+<link rel="stylesheet" href="${pageContext.request.contextPath}/resources/css/air-unificado.css">
 </head>
 <body>
-
-<nav style="background:#003d7a;padding:12px 28px;color:#fff;
-            font-weight:bold;font-size:1.1rem;">
-    AIR - Dashboard Administrativo
-    <span style="float:right;font-weight:normal;font-size:0.9rem;">
-        <c:out value="${sessionScope.usuarioNombre}" default="Usuario"/>
-    </span>
-</nav>
-
+<div class="air-bar"><span class="marca">SGL-AIR &middot; Asamblea Institucional Representativa</span><nav><a href="${pageContext.request.contextPath}/inicio">Inicio</a><a href="${pageContext.request.contextPath}/auth/logout" class="salir">Salir</a></nav></div>
 <div class="page-container">
 
     <c:if test="${not empty errorBD}">

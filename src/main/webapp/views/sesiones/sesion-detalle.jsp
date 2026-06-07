@@ -20,8 +20,10 @@
         .alert-success { background: #d4edda; color: #155724; padding: 12px; border-radius: 4px; margin-bottom: 16px; }
         .btn { padding: 6px 12px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; }
     </style>
+<link rel="stylesheet" href="${pageContext.request.contextPath}/resources/css/air-unificado.css">
 </head>
 <body>
+<div class="air-bar"><span class="marca">SGL-AIR &middot; Asamblea Institucional Representativa</span><nav><a href="${pageContext.request.contextPath}/inicio">Inicio</a><a href="${pageContext.request.contextPath}/auth/logout" class="salir">Salir</a></nav></div>
 <a href="${pageContext.request.contextPath}/sesiones">&larr; Volver al listado</a>
 <h1>Sesion ${sesion.numeroSesion}</h1>
 <c:if test="${param.asistencia == '1'}">

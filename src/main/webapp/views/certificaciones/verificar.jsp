@@ -1,4 +1,4 @@
-﻿<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
 <!DOCTYPE html>
 <html lang="es">
@@ -88,8 +88,10 @@
             border-top: 1px solid #ddd;
         }
     </style>
+<link rel="stylesheet" href="${pageContext.request.contextPath}/resources/css/air-unificado.css">
 </head>
 <body>
+<div class="air-bar"><span class="marca">SGL-AIR &middot; Asamblea Institucional Representativa</span><nav><a href="${pageContext.request.contextPath}/inicio">Inicio</a><a href="${pageContext.request.contextPath}/auth/logout" class="salir">Salir</a></nav></div>
     <div class="contenedor-verificar">
         <h1>Verificacion de Certificacion</h1>
         <p style="color:#666">

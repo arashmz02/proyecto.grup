@@ -47,6 +47,7 @@
         .estado{margin-top:0.4rem;color:#7f8c8d;font-size:0.85rem;}
         .vacio{color:#7f8c8d;font-style:italic;}
     </style>
+<link rel="stylesheet" href="${pageContext.request.contextPath}/resources/css/air-unificado.css">
 </head>
 <body>
     <div class="barra">

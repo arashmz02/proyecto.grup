@@ -104,10 +104,10 @@
             margin-bottom: 1.1rem;
         }
     </style>
+<link rel="stylesheet" href="${pageContext.request.contextPath}/resources/css/air-unificado.css">
 </head>
 <body>
-
-    <div class="tarjeta-login">
+<div class="tarjeta-login">
         <h1>Sistema de Gestion Legislativa AIR</h1>
         <p class="subtitulo">Asamblea Institucional Representativa - ITCR</p>
 

@@ -98,6 +98,7 @@
         .detalle-info p { margin: 0.3rem 0; font-size: 0.95rem; color: #34495e; }
         .detalle-info strong { color: #1f2d3d; }
     </style>
+<link rel="stylesheet" href="${pageContext.request.contextPath}/resources/css/air-unificado.css">
 </head>
 <body>
 

@@ -18,8 +18,10 @@
         select, button { padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; }
         button { background: #3498db; color: white; border: none; cursor: pointer; }
     </style>
+<link rel="stylesheet" href="${pageContext.request.contextPath}/resources/css/air-unificado.css">
 </head>
 <body>
+<div class="air-bar"><span class="marca">SGL-AIR &middot; Asamblea Institucional Representativa</span><nav><a href="${pageContext.request.contextPath}/inicio">Inicio</a><a href="${pageContext.request.contextPath}/auth/logout" class="salir">Salir</a></nav></div>
 
 <a href="${pageContext.request.contextPath}/propuestas">&larr; Volver al buscador</a>
 

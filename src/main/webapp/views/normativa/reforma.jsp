@@ -20,8 +20,10 @@
         #mensaje.exito { background: #d4edda; color: #155724; }
         #mensaje.error { background: #f8d7da; color: #721c24; }
     </style>
+<link rel="stylesheet" href="${pageContext.request.contextPath}/resources/css/air-unificado.css">
 </head>
 <body>
+<div class="air-bar"><span class="marca">SGL-AIR &middot; Asamblea Institucional Representativa</span><nav><a href="${pageContext.request.contextPath}/inicio">Inicio</a><a href="${pageContext.request.contextPath}/auth/logout" class="salir">Salir</a></nav></div>
     <div class="contenedor">
         <h2>✏️ Crear Elemento Normativo</h2>
 

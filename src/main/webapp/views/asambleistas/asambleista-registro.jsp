@@ -105,6 +105,7 @@
         .btn-cancelar { background: #95a5a6; }
         .btn-cancelar:hover { background: #7f8c8d; }
     </style>
+<link rel="stylesheet" href="${pageContext.request.contextPath}/resources/css/air-unificado.css">
 </head>
 <body>
 

@@ -22,6 +22,7 @@ td{padding:7px 10px;border-bottom:1px solid #e5e8e8;}
 tr:nth-child(even) td{background:#f7f9f9;}
 .vacio{color:#7f8c8d;font-style:italic;}
 </style>
+<link rel="stylesheet" href="${pageContext.request.contextPath}/resources/css/air-unificado.css">
 </head>
 <body>
 <div class="barra">

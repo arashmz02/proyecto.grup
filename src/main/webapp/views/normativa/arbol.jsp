@@ -29,6 +29,7 @@
         .cargando { text-align: center; color: #666; padding: 40px; font-style: italic; }
         .error { background: #f8d7da; color: #721c24; padding: 15px; border-radius: 4px; }
     </style>
+<link rel="stylesheet" href="${pageContext.request.contextPath}/resources/css/air-unificado.css">
 </head>
 <body>
 

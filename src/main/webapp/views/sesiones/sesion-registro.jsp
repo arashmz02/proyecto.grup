@@ -17,8 +17,10 @@
         .alert-error { background: #f8d7da; color: #721c24; padding: 12px; border-radius: 4px; margin-bottom: 16px; }
         .help { font-size: 12px; color: #7f8c8d; margin-top: 2px; }
     </style>
+<link rel="stylesheet" href="${pageContext.request.contextPath}/resources/css/air-unificado.css">
 </head>
 <body>
+<div class="air-bar"><span class="marca">SGL-AIR &middot; Asamblea Institucional Representativa</span><nav><a href="${pageContext.request.contextPath}/inicio">Inicio</a><a href="${pageContext.request.contextPath}/auth/logout" class="salir">Salir</a></nav></div>
 <h1>Registrar Nueva Sesion</h1>
 <c:if test="${not empty error}">
     <div class="alert-error">${error}</div>

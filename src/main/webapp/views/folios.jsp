@@ -74,6 +74,7 @@
         }
         .detalle { color: #7f8c8d; font-size: 0.85rem; margin-top: 0.75rem; }
     </style>
+<link rel="stylesheet" href="${pageContext.request.contextPath}/resources/css/air-unificado.css">
 </head>
 <body>
 
