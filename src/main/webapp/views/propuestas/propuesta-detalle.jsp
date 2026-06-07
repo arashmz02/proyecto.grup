@@ -36,7 +36,7 @@
         <p><strong>Texto sustitutivo:</strong></p>
         <p style="background: #f8f9fa; padding: 12px; border-left: 4px solid #3498db;">${propuesta.textoSustitutivo}</p>
     </c:if>
-    <c:if test="${propuesta.conciliada}">
+    <c:if test="${propuesta.esConciliada()}">
         <p><span class="badge" style="background:#d1ecf1; color:#0c5460;">PROPUESTA CONCILIADA</span></p>
     </c:if>
     <c:if test="${not empty propuesta.linkDocumentacion}">

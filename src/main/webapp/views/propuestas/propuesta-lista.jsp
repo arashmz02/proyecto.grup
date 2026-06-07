@@ -63,7 +63,7 @@
                 <c:forEach var="p" items="${propuestas}">
                     <tr>
                         <td><strong>${p.codigoAir}</strong>
-                            <c:if test="${p.conciliada}"><span class="badge badge-discusion">CONCILIADA</span></c:if>
+                            <c:if test="${p.esConciliada()}"><span class="badge badge-discusion">CONCILIADA</span></c:if>
                         </td>
                         <td>${p.titulo}</td>
                         <td>

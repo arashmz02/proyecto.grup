@@ -3,7 +3,7 @@ package com.itcr.air.dao;
 import java.sql.*;
 import java.util.*;
 import com.google.gson.*;
-import com.itcr.air.util.ConexionBD;
+import config.Conexion;
 
 /**
  * NormativaDAO.java
@@ -39,7 +39,7 @@ public class NormativaDAO {
         
         JsonArray resultado = new JsonArray();
         
-        try (Connection conn = ConexionBD.obtenerConexion();
+        try (Connection conn = Conexion.obtener();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setInt(1, idReglamento);
@@ -71,7 +71,7 @@ public class NormativaDAO {
         
         JsonArray resultado = new JsonArray();
         
-        try (Connection conn = ConexionBD.obtenerConexion();
+        try (Connection conn = Conexion.obtener();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setInt(1, idElementoPadre);
@@ -98,7 +98,7 @@ public class NormativaDAO {
             "AND fecha_inicio_vigencia <= CAST(? AS DATE) " +
             "AND (fecha_fin_vigencia IS NULL OR fecha_fin_vigencia > CAST(? AS DATE))";
         
-        try (Connection conn = ConexionBD.obtenerConexion();
+        try (Connection conn = Conexion.obtener();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setInt(1, idElemento);
@@ -131,7 +131,7 @@ public class NormativaDAO {
             "VALUES (?, ?, ?, ?, ?, ?, " +
             "(SELECT id_estado_vigencia FROM catalogo_estado_vigencia WHERE nombre = 'Vigente'))";
         
-        try (Connection conn = ConexionBD.obtenerConexion();
+        try (Connection conn = Conexion.obtener();
              PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             
             stmt.setInt(1, idReglamento);
@@ -188,7 +188,7 @@ public class NormativaDAO {
         
         JsonArray resultado = new JsonArray();
         
-        try (Connection conn = ConexionBD.obtenerConexion();
+        try (Connection conn = Conexion.obtener();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setInt(1, idElemento);
@@ -225,7 +225,7 @@ public class NormativaDAO {
             "JOIN catalogo_estado_vigencia v ON e.id_estado_vigencia = v.id_estado_vigencia " +
             "WHERE e.id_elemento = ?";
         
-        try (Connection conn = ConexionBD.obtenerConexion();
+        try (Connection conn = Conexion.obtener();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setInt(1, idElemento);
